@@ -71,7 +71,7 @@ public class BlockInstanceNode : AssemblyNode
         InstanceNumber = instanceNumber;
         InstanceTransform = instance.InstanceXform;
         LinkType = definition.UpdateType;
-        LinkedFilePath = definition.IsLinkedDefinition ? definition.SourceArchive : null;
+        LinkedFilePath = IsLinkedBlock(definition) ? definition.SourceArchive : null;
         
         // Get user attributes (UserText)
         UserAttributes = new Dictionary<string, string>();
@@ -107,7 +107,7 @@ public class BlockInstanceNode : AssemblyNode
         InstanceNumber = 0;
         InstanceTransform = Transform.Identity;
         LinkType = definition.UpdateType;
-        LinkedFilePath = definition.IsLinkedDefinition ? definition.SourceArchive : null;
+        LinkedFilePath = IsLinkedBlock(definition) ? definition.SourceArchive : null;
         TotalInstanceCount = definition.UseCount();
         UserAttributes = new Dictionary<string, string>();
     }
@@ -118,6 +118,15 @@ public class BlockInstanceNode : AssemblyNode
     private static string FormatDisplayName(string definitionName, int instanceNumber)
     {
         return $"{definitionName} #{instanceNumber}";
+    }
+
+    /// <summary>
+    /// Checks if a block definition is linked (external reference).
+    /// </summary>
+    private static bool IsLinkedBlock(InstanceDefinition definition)
+    {
+        return definition.UpdateType == InstanceDefinitionUpdateType.Linked ||
+               definition.UpdateType == InstanceDefinitionUpdateType.LinkedAndEmbedded;
     }
 
     /// <summary>
