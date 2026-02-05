@@ -13,6 +13,7 @@
     
     <!-- Assembly Info -->
     <AssemblyName>RhinoAssemblyOutliner</AssemblyName>
+    <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoAssemblyOutliner</RootNamespace>
     <Version>0.1.0</Version>
     <Authors>RhinoAssemblyOutliner Contributors</Authors>
