@@ -53,10 +53,20 @@ public class AssemblyTreeView : TreeGridView
         Border = BorderType.None;
 
         // Define columns
+        // Visibility toggle column (eye icon)
+        var visibilityColumn = new GridColumn
+        {
+            HeaderText = "👁",
+            DataCell = new TextBoxCell(0),  // Shows 👁 or 👁‍🗨 based on visibility
+            Width = 30,
+            Editable = false
+        };
+        Columns.Add(visibilityColumn);
+
         Columns.Add(new GridColumn
         {
             HeaderText = "Name",
-            DataCell = new TextBoxCell(0),
+            DataCell = new TextBoxCell(1),
             AutoSize = true,
             Editable = false
         });
@@ -64,14 +74,14 @@ public class AssemblyTreeView : TreeGridView
         Columns.Add(new GridColumn
         {
             HeaderText = "Layer",
-            DataCell = new TextBoxCell(1),
+            DataCell = new TextBoxCell(2),
             Width = 120
         });
 
         Columns.Add(new GridColumn
         {
             HeaderText = "Type",
-            DataCell = new TextBoxCell(2),
+            DataCell = new TextBoxCell(3),
             Width = 80
         });
 
@@ -79,9 +89,38 @@ public class AssemblyTreeView : TreeGridView
         SelectedItemChanged += OnSelectedItemChanged;
         Activated += OnActivated;
         CellFormatting += OnCellFormatting;
+        CellClick += OnCellClick;
         
         // Context menu
         ContextMenu = BuildContextMenu();
+    }
+
+    /// <summary>
+    /// Handles cell clicks, including visibility toggle.
+    /// </summary>
+    private void OnCellClick(object sender, GridCellMouseEventArgs e)
+    {
+        // Column 0 is the visibility toggle
+        if (e.Column == 0 && e.Item is AssemblyTreeItem item)
+        {
+            // Toggle visibility via event
+            VisibilityToggleRequested?.Invoke(this, item.Node);
+            
+            // Update the icon
+            UpdateVisibilityIcon(item);
+        }
+    }
+
+    /// <summary>
+    /// Updates the visibility icon for a tree item.
+    /// </summary>
+    private void UpdateVisibilityIcon(AssemblyTreeItem item)
+    {
+        if (item.Values is object[] values && values.Length > 0)
+        {
+            values[0] = item.Node.IsVisible ? "👁" : "◯";
+        }
+        ReloadItem(item);
     }
 
     /// <summary>
@@ -482,6 +521,7 @@ public class AssemblyTreeItem : TreeGridItem
         Node = node;
 
         // Set values for columns
+        string visibilityIcon = node.IsVisible ? "👁" : "◯";
         string layerName = "";
         string typeName = "";
 
@@ -493,10 +533,12 @@ public class AssemblyTreeItem : TreeGridItem
         else if (node is DocumentNode docNode)
         {
             typeName = "Document";
+            visibilityIcon = "📄";  // Document icon
         }
 
         Values = new object[]
         {
+            visibilityIcon,
             node.DisplayName,
             layerName,
             typeName

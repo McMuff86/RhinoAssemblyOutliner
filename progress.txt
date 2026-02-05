@@ -20,10 +20,10 @@
 [x] Event-Debouncing
 
 ## Phase 3: Services & Features 🔄
-[ ] SelectionSyncService (saubere Abstraktion)
-[ ] VisibilityService (Show/Hide/Isolate)
-[ ] Visibility Toggle im Tree (Auge-Icon)
-[ ] Context Menu (Rechtsklick-Aktionen)
+[x] SelectionSyncService (saubere Abstraktion)
+[x] VisibilityService (Show/Hide/Isolate)
+[x] Visibility Toggle im Tree (Auge-Icon Spalte)
+[x] Context Menu (Rechtsklick-Aktionen)
 [ ] Icons für Block-Typen (Embedded/Linked)
 [ ] User Attributes Anzeige (UserText)
 
