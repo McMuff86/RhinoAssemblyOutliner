@@ -32,7 +32,7 @@
 [ ] Instance Count Caching
 [ ] Keyboard Shortcuts
 [x] Panel Icon (manifest.yml vorbereitet)
-[ ] Error Handling & Edge Cases
+[x] Error Handling & Edge Cases (null checks, recursion limit, try-catch)
 
 ## Phase 5: Testing & Release
 [ ] Unit Tests für Model Layer

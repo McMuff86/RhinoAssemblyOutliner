@@ -349,12 +349,23 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     public void RefreshTree()
     {
-        var doc = RhinoDoc.ActiveDoc;
-        if (doc == null) return;
+        try
+        {
+            var doc = RhinoDoc.ActiveDoc;
+            if (doc == null) return;
 
-        var builder = new AssemblyTreeBuilder(doc);
-        _rootNode = builder.BuildTree();
-        _treeView.LoadTree(_rootNode);
+            var builder = new AssemblyTreeBuilder(doc);
+            _rootNode = builder.BuildTree();
+            
+            if (_rootNode != null)
+            {
+                _treeView.LoadTree(_rootNode);
+            }
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Error refreshing tree: {ex.Message}");
+        }
     }
 
     #endregion

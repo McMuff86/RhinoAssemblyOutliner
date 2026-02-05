@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Rhino;
 using Rhino.DocObjects;
 
@@ -24,40 +27,62 @@ public class AssemblyTreeBuilder
         _definitionTotalCounts = new Dictionary<int, int>();
     }
 
+    // Tracks visited definitions to prevent infinite recursion
+    private HashSet<int> _visitedDefinitions;
+    
+    // Maximum recursion depth to prevent stack overflow
+    private const int MaxRecursionDepth = 100;
+
     /// <summary>
     /// Builds the complete assembly tree for the document.
     /// </summary>
     /// <returns>The root document node containing the full hierarchy.</returns>
     public DocumentNode BuildTree()
     {
-        // Reset counters
-        _definitionInstanceCounters.Clear();
-        _definitionTotalCounts.Clear();
-
-        // Pre-calculate total instance counts per definition
-        CalculateTotalInstanceCounts();
-
-        // Create root document node
-        var rootNode = new DocumentNode(_doc);
-
-        // Get all top-level objects (objects not inside any block)
-        var topLevelObjects = GetTopLevelObjects();
-        
-        rootNode.TopLevelObjectCount = topLevelObjects.Count;
-        rootNode.TotalBlockDefinitionCount = _doc.InstanceDefinitions.ActiveCount;
-        rootNode.TotalBlockInstanceCount = _definitionTotalCounts.Values.Sum();
-
-        // Process each top-level object
-        foreach (var obj in topLevelObjects)
+        try
         {
-            var childNode = CreateNodeForObject(obj);
-            if (childNode != null)
-            {
-                rootNode.AddChild(childNode);
-            }
-        }
+            // Reset counters
+            _definitionInstanceCounters.Clear();
+            _definitionTotalCounts.Clear();
+            _visitedDefinitions = new HashSet<int>();
 
-        return rootNode;
+            // Pre-calculate total instance counts per definition
+            CalculateTotalInstanceCounts();
+
+            // Create root document node
+            var rootNode = new DocumentNode(_doc);
+
+            // Get all top-level objects (objects not inside any block)
+            var topLevelObjects = GetTopLevelObjects();
+            
+            rootNode.TopLevelObjectCount = topLevelObjects.Count;
+            rootNode.TotalBlockDefinitionCount = _doc.InstanceDefinitions?.ActiveCount ?? 0;
+            rootNode.TotalBlockInstanceCount = _definitionTotalCounts.Values.Sum();
+
+            // Process each top-level object
+            foreach (var obj in topLevelObjects)
+            {
+                try
+                {
+                    var childNode = CreateNodeForObject(obj);
+                    if (childNode != null)
+                    {
+                        rootNode.AddChild(childNode);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RhinoApp.WriteLine($"AssemblyOutliner: Error processing object {obj?.Id}: {ex.Message}");
+                }
+            }
+
+            return rootNode;
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Error building tree: {ex.Message}");
+            return new DocumentNode(_doc); // Return empty tree on error
+        }
     }
 
     /// <summary>
@@ -115,11 +140,22 @@ public class AssemblyTreeBuilder
     /// Creates a block instance node and recursively processes its children.
     /// </summary>
     /// <param name="instance">The block instance object.</param>
+    /// <param name="depth">Current recursion depth.</param>
     /// <returns>The created block instance node with children.</returns>
-    private BlockInstanceNode? CreateBlockInstanceNode(InstanceObject instance)
+    private BlockInstanceNode? CreateBlockInstanceNode(InstanceObject instance, int depth = 0)
     {
+        // Guard against null
+        if (instance == null) return null;
+        
         var definition = instance.InstanceDefinition;
         if (definition == null || definition.IsDeleted) return null;
+
+        // Prevent infinite recursion (self-referencing blocks)
+        if (depth > MaxRecursionDepth)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Max recursion depth reached for block '{definition.Name}'");
+            return null;
+        }
 
         // Increment instance counter for this definition
         if (!_definitionInstanceCounters.ContainsKey(definition.Index))
@@ -132,13 +168,22 @@ public class AssemblyTreeBuilder
         var totalCount = _definitionTotalCounts.GetValueOrDefault(definition.Index, 1);
 
         // Create the node
-        var node = new BlockInstanceNode(instance, definition, instanceNumber)
+        BlockInstanceNode node;
+        try
         {
-            TotalInstanceCount = totalCount
-        };
+            node = new BlockInstanceNode(instance, definition, instanceNumber)
+            {
+                TotalInstanceCount = totalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Error creating node for '{definition.Name}': {ex.Message}");
+            return null;
+        }
 
         // Recursively process nested blocks within this definition
-        ProcessDefinitionContents(node, definition);
+        ProcessDefinitionContents(node, definition, depth + 1);
 
         return node;
     }
@@ -148,23 +193,35 @@ public class AssemblyTreeBuilder
     /// </summary>
     /// <param name="parentNode">The parent node to add children to.</param>
     /// <param name="definition">The block definition to process.</param>
-    private void ProcessDefinitionContents(BlockInstanceNode parentNode, InstanceDefinition definition)
+    /// <param name="depth">Current recursion depth.</param>
+    private void ProcessDefinitionContents(BlockInstanceNode parentNode, InstanceDefinition definition, int depth = 0)
     {
+        if (definition == null) return;
+        
         var objects = definition.GetObjects();
-        if (objects == null) return;
+        if (objects == null || objects.Length == 0) return;
 
         foreach (var obj in objects)
         {
-            if (obj is InstanceObject nestedInstance)
+            if (obj == null || obj.IsDeleted) continue;
+            
+            try
             {
-                var childNode = CreateBlockInstanceNode(nestedInstance);
-                if (childNode != null)
+                if (obj is InstanceObject nestedInstance)
                 {
-                    parentNode.AddChild(childNode);
+                    var childNode = CreateBlockInstanceNode(nestedInstance, depth);
+                    if (childNode != null)
+                    {
+                        parentNode.AddChild(childNode);
+                    }
                 }
+                // Note: For MVP, we skip loose geometry inside blocks
+                // This can be extended to include GeometryNode in future iterations
             }
-            // Note: For MVP, we skip loose geometry inside blocks
-            // This can be extended to include GeometryNode in future iterations
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"AssemblyOutliner: Error processing nested object: {ex.Message}");
+            }
         }
     }
 
