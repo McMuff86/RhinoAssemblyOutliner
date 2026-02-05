@@ -34,28 +34,3 @@ public class OpenOutlinerCommand : Command
         return Result.Success;
     }
 }
-
-/// <summary>
-/// Command to refresh the Assembly Outliner tree.
-/// </summary>
-public class RefreshOutlinerCommand : Command
-{
-    public override string EnglishName => "AssemblyOutlinerRefresh";
-
-    protected override Result RunCommand(RhinoDoc doc, RunMode mode)
-    {
-        // Find the panel and refresh it
-        var panel = Panels.GetPanel<AssemblyOutlinerPanel>(doc.RuntimeSerialNumber);
-        if (panel != null)
-        {
-            panel.RefreshTree();
-            RhinoApp.WriteLine("Assembly Outliner refreshed.");
-        }
-        else
-        {
-            RhinoApp.WriteLine("Assembly Outliner panel is not open.");
-        }
-        
-        return Result.Success;
-    }
-}
