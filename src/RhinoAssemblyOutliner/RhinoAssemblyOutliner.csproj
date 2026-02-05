@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <NoWarn>NU1701</NoWarn>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     
     <!-- Rhino Plugin Settings -->
     <EnableDynamicLoading>true</EnableDynamicLoading>
