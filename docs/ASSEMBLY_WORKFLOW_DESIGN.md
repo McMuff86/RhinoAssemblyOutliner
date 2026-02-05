@@ -2,7 +2,8 @@
 
 **Autor:** Research Subagent  
 **Datum:** 2026-02-05  
-**Status:** Design Document (Grundlage für Implementation)
+**Status:** Design Document (Grundlage für Implementation)  
+**Letzte Aktualisierung:** 2026-02-05 (Post-CAD-Research Synthesis)
 
 ---
 
@@ -14,6 +15,7 @@
 4. [Integration Architecture (C++ ↔ C#)](#4-integration-architecture-c--c)
 5. [Edge Cases & Challenges](#5-edge-cases--challenges)
 6. [Implementation Roadmap](#6-implementation-roadmap)
+7. [**UX Recommendations (Post-Research)**](#7-ux-recommendations-post-research)
 
 ---
 
@@ -1434,5 +1436,114 @@ void CGetBlockInsertPoint::DynamicDraw(
 
 ---
 
+## 7. UX Recommendations (Post-Research)
+
+> Basierend auf der Analyse von SolidWorks, Inventor, Fusion 360, CATIA und Siemens NX.  
+> Siehe: `research/SYNTHESIS_RECOMMENDATIONS.md` für vollständige Details.
+
+### 7.1 Industrie-Standard Patterns übernehmen
+
+#### Eye Icon Convention (UNIVERSAL)
+```
+👁️  = Sichtbar (ausgefülltes Auge)
+〰️  = Hidden (durchgestrichenes Auge)
+◐   = Gemischt (Parent mit hidden + visible children)
+```
+**Implementierung:** Klickbares Icon in Tree-Spalte, 1-Click Toggle
+
+#### Visual Feedback für Hidden Items
+- **Icon:** Ausgegraut (dimmed)
+- **Text:** Grau oder kursiv
+- **Im Tree belassen** (nicht ausblenden wie SolidWorks' "Show Hidden" Mode)
+
+#### Keyboard Shortcuts (SolidWorks-inspiriert)
+| Shortcut | Aktion | Priorität |
+|----------|--------|-----------|
+| **H** | Hide selected | MVP |
+| **Shift+H** | Show selected | MVP |
+| **I** | Isolate selected | MVP |
+| **Esc** | Exit Isolate | MVP |
+| **Tab** | Cycle visibility (future) | v2 |
+
+### 7.2 Context Menu Struktur
+
+```
+Right-Click auf Komponente:
+├── 👁️ Show
+├── 〰️ Hide  
+├── ─────────────────────
+├── 🎯 Isolate
+├── 🔄 Show All Components
+├── ─────────────────────
+├── 🔍 Zoom to
+├── ✏️ Select in Viewport
+├── ─────────────────────
+├── 📋 Select All Same Definition
+└── ⚙️ Edit Block (→ BlockEdit)
+```
+
+### 7.3 Isolate Pattern
+
+**Flow:**
+1. User selektiert Komponente(n) im Tree
+2. Click "Isolate" im Context Menu
+3. **Alle ANDEREN** Komponenten der gleichen Instance werden hidden
+4. UI zeigt "Isolation Mode" Indikator
+5. "Isolate Off" oder **ESC** → Alles wieder sichtbar
+
+**Wichtig:** Isolate-State ist **temporär** (nicht persistiert)
+
+### 7.4 Rhino-Adaptionen
+
+| CAD-Pattern | Rhino-Anpassung |
+|-------------|-----------------|
+| Display States | Via **Layer States** approximieren (v1), Custom States (v2) |
+| Edit in Context | Integration mit `BlockEdit` Command |
+| Configurations | Nicht emulieren - ist Grasshopper-Territorium |
+| Suppress | Nicht nötig - wir machen nur Visual Hiding |
+
+### 7.5 Zweistufiges Visibility-Modell
+
+```
+┌─────────────────────────────────────────┐
+│      Layer Visibility (Rhino-native)    │
+│              (übergeordnet)             │
+└───────────────────┬─────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────┐
+│   Per-Instance Visibility (unser Feature)│
+│           (komponenten-level)           │
+└─────────────────────────────────────────┘
+                    │
+                    ▼
+            RESULTAT: Sichtbar?
+```
+
+**Regel:** Beide müssen "visible" sein für Sichtbarkeit.
+- Layer hidden → Komponente hidden (wir können nicht überschreiben)
+- Layer visible → Unsere per-instance Visibility entscheidet
+
+### 7.6 Display States für v2
+
+**Konzept: Named Visibility States**
+
+```csharp
+public class VisibilityState {
+    public string Name { get; set; }
+    public Dictionary<Guid, HashSet<Guid>> HiddenComponents { get; set; }
+    // Key: Instance ID, Value: Set of hidden component IDs
+}
+```
+
+**UI:**
+- Dropdown in Toolbar: "Default", "Exploded View", "Interior Only"
+- "Save Current State" Button
+- "Manage States..." Dialog
+
+**Storage:** Document-Level UserData
+
+---
+
 *Dokument erstellt: 2026-02-05*  
-*Letzte Aktualisierung: 2026-02-05*
+*Letzte Aktualisierung: 2026-02-05 (UX Recommendations hinzugefügt)*

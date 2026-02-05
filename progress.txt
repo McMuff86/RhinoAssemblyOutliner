@@ -94,8 +94,26 @@
 [ ] C#/C++ Integration (P/Invoke)
 [ ] UI Integration im Outliner
 
+## Phase 10: CAD Research & Synthesis 🔬
+[x] SolidWorks FeatureManager Deep-Dive (Research Agent 1)
+[x] CAD Industry Analysis: Inventor, Fusion, CATIA, NX (Research Agent 2)
+[x] Synthesis & Recommendations (Coordinator)
+[x] ASSEMBLY_WORKFLOW_DESIGN.md mit UX Recommendations ergänzt
+[x] README.md: Hybrid C++/C# + Per-Instance Feature documented
+[x] CLAUDE.md: Aktueller Projektstatus & Architektur-Entscheidungen
+[x] AGENTS.md: Multi-Agent Setup dokumentiert
+[x] progress.txt: Vollständige Chronologie
+
+## Key Research Findings
+- MVP MUST-HAVES: Eye Icon Toggle, Per-Instance Visibility, Tree, Bidirectional Selection
+- UX Patterns von SolidWorks übernehmen: Eye Icons, Grayed Hidden, Isolate Mode
+- Rhino-Adaptionen: Layer Integration, BlockEdit statt Edit-in-Context
+- v2 Features: Named Display States, Keyboard Shortcuts, Show with Dependents
+
 ## Notizen
 - 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen
 - Multi-Agent Setup: Researcher, Coder, Tester, Docs
 - 2026-02-05 11:00: Assembly Mode Phase 1 implementiert
 - 2026-02-05 11:20: Per-Instance Visibility PoC implementiert (DisplayConduit Ansatz)
+- 2026-02-05 22:00: CAD Research abgeschlossen (2 parallele Research Agents)
+- 2026-02-05 22:10: Synthesis & Doc Updates (Coordinator)

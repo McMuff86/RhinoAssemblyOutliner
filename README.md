@@ -2,10 +2,13 @@
 
 [![Rhino 8](https://img.shields.io/badge/Rhino-8-blue?logo=rhinoceros)](https://www.rhino3d.com/)
 [![.NET 7.0+](https://img.shields.io/badge/.NET-7.0+-purple?logo=dotnet)](https://dotnet.microsoft.com/)
+[![C++17](https://img.shields.io/badge/C++-17-orange?logo=cplusplus)](https://isocpp.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
 
 A SolidWorks FeatureManager-style **Assembly Outliner** for Rhino 8 that displays block hierarchies, nesting, and component status in a persistent, dockable tree structure.
+
+**Hybrid C++/C# Architecture** for native performance and modern UI.
 
 ---
 
@@ -17,6 +20,7 @@ Rhino's built-in Block Manager shows a **flat list of block definitions** — no
 - No hierarchical instance tree
 - No parent → child context
 - Limited bidirectional selection
+- **No per-instance component visibility** ← Game-changer!
 - No BOM export from structure
 
 ## ✨ The Solution
@@ -52,10 +56,30 @@ Assembly Outliner provides the **missing hierarchical instance tree** that shows
 - 🔍 **Search & Filter** — Find components quickly
 - 📋 **Context Menu** — Select all same, edit block, zoom to
 
+### 🆕 Per-Instance Component Visibility
+
+**The killer feature Rhino doesn't have!**
+
+Hide individual components within a single block instance — without affecting other instances of the same definition:
+
+```
+📦 Cabinet_600 #1     👁️ (all visible)
+│   ├─ ⬡ Korpus       👁️
+│   ├─ ⬡ Tür          〰️ ← HIDDEN only in this instance
+│   └─ ⬡ Rückwand     👁️
+
+📦 Cabinet_600 #2     👁️ (all visible)  
+│   ├─ ⬡ Korpus       👁️
+│   ├─ ⬡ Tür          👁️ ← Still visible here!
+│   └─ ⬡ Rückwand     👁️
+```
+
+This is achieved through a **native C++ DisplayConduit** that intercepts Rhino's rendering pipeline.
+
 ### Planned Features
 - 📊 BOM (Bill of Materials) export
-- 🎨 Custom icons per block type
-- 💾 Saved tree configurations
+- 💾 Named Visibility States (like SolidWorks Display States)
+- ⌨️ Keyboard shortcuts (H/I for Hide/Isolate)
 
 ---
 
@@ -89,18 +113,30 @@ For detailed usage, see the [User Guide](docs/USER_GUIDE.md).
 
 ## 🏗️ Architecture
 
-Built with:
-- **Eto.Forms** — Cross-platform UI framework
-- **RhinoCommon** — Rhino 8 API
-- **C# / .NET 7** — Modern, type-safe code
+**Hybrid C++/C# Plugin** — best of both worlds:
+
+| Component | Language | Purpose |
+|-----------|----------|---------|
+| **DisplayConduit** | C++ | Intercept rendering, custom component visibility |
+| **UserData** | C++ | Persist visibility state to .3dm file |
+| **UI (Eto.Forms)** | C# | Modern, responsive tree interface |
+| **Commands** | C# | Rhino command integration |
+| **Services** | C# | Business logic, event handling |
 
 ```
 RhinoAssemblyOutliner/
-├── Commands/        # Rhino commands
-├── UI/              # Eto.Forms panels and controls
-├── Model/           # Tree data structures
-├── Services/        # Selection, visibility, events
-└── Resources/       # Icons and assets
+├── src/
+│   ├── Native/              # C++ Plugin (DisplayConduit, UserData)
+│   │   ├── VisibilityConduit.cpp
+│   │   ├── ComponentVisibilityData.cpp
+│   │   └── NativeAPI.cpp    # extern "C" exports
+│   └── RhinoAssemblyOutliner/  # C# Plugin
+│       ├── Commands/
+│       ├── UI/
+│       ├── Model/
+│       ├── Services/
+│       └── Native/          # P/Invoke wrapper
+└── docs/
 ```
 
 See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
