@@ -2,7 +2,7 @@
 name: assemblyoutliner
 version: 0.1.0
 authors:
-- Adrian Muff
+- Adrian Muff <sentinel.core.ai@gmail.com>
 description: >
   A SolidWorks FeatureManager-style Assembly Outliner for Rhino 8.
   Displays block hierarchies in a persistent, dockable tree structure with
