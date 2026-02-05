@@ -1,5 +1,4 @@
 using System;
-using System.Timers;
 using Eto.Drawing;
 using Eto.Forms;
 using Rhino;
@@ -26,7 +25,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private VisibilityService _visibilityService;
     
     // Event debouncing
-    private Timer _refreshTimer;
+    private System.Timers.Timer _refreshTimer;
     private bool _needsRefresh;
     private bool _isSyncingFromViewport;
     private bool _isSyncingFromTree;
@@ -45,7 +44,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _documentSerialNumber = documentSerialNumber;
         
         // Initialize refresh timer (100ms debounce)
-        _refreshTimer = new Timer(100);
+        _refreshTimer = new System.Timers.Timer(100);
         _refreshTimer.AutoReset = false;
         _refreshTimer.Elapsed += (s, e) => RefreshTreeDebounced();
         

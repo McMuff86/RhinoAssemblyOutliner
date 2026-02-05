@@ -21,7 +21,7 @@ public class AssemblyTreeView : TreeGridView
     /// <summary>
     /// Raised when selection changes.
     /// </summary>
-    public event EventHandler<AssemblyNode> SelectionChanged;
+    public new event EventHandler<AssemblyNode> SelectionChanged;
 
     /// <summary>
     /// Raised when a node is activated (double-clicked).
