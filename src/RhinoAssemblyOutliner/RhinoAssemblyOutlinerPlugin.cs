@@ -1,5 +1,7 @@
 using Rhino;
 using Rhino.PlugIns;
+using Rhino.UI;
+using RhinoAssemblyOutliner.UI;
 
 namespace RhinoAssemblyOutliner;
 
@@ -28,6 +30,15 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     protected override LoadReturnCode OnLoad(ref string errorMessage)
     {
         RhinoApp.WriteLine("RhinoAssemblyOutliner plugin loaded.");
+        
+        // Register the Assembly Outliner panel
+        Panels.RegisterPanel(
+            this,
+            typeof(AssemblyOutlinerPanel),
+            "Assembly Outliner",
+            null,  // Icon (can be added later)
+            PanelType.PerDoc
+        );
         
         // Register event handlers for document changes
         RhinoDoc.BeginOpenDocument += OnBeginOpenDocument;
