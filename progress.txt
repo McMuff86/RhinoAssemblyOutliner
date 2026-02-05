@@ -1,0 +1,53 @@
+# RhinoAssemblyOutliner - Progress Tracker
+# =========================================
+# Status: [x] Done | [ ] Open | [~] In Progress | [-] Blocked
+
+## Phase 1: Foundation ✅
+[x] GitHub Repo erstellen
+[x] Solution Scaffold (.sln, .csproj)
+[x] Model Layer (AssemblyNode, BlockInstanceNode, DocumentNode)
+[x] AssemblyTreeBuilder (rekursive Traversierung)
+[x] Plugin-Klasse mit Panel-Registrierung
+[x] Dokumentation (SPEC.md, ARCHITECTURE.md, RESEARCH.md)
+
+## Phase 2: UI Layer ✅
+[x] AssemblyOutlinerPanel (IPanel, dockbar)
+[x] AssemblyTreeView (TreeGridView)
+[x] DetailPanel (Properties)
+[x] OpenOutlinerCommand
+[x] Bidirektionale Selektion (Tree ↔ Viewport)
+[x] Suchfilter
+[x] Event-Debouncing
+
+## Phase 3: Services & Features 🔄
+[ ] SelectionSyncService (saubere Abstraktion)
+[ ] VisibilityService (Show/Hide/Isolate)
+[ ] Visibility Toggle im Tree (Auge-Icon)
+[ ] Context Menu (Rechtsklick-Aktionen)
+[ ] Icons für Block-Typen (Embedded/Linked)
+[ ] User Attributes Anzeige (UserText)
+
+## Phase 4: Polish & Performance
+[ ] Lazy Loading für grosse Dokumente
+[ ] Instance Count Caching
+[ ] Keyboard Shortcuts
+[ ] Panel Icon
+[ ] Error Handling & Edge Cases
+
+## Phase 5: Testing & Release
+[ ] Unit Tests für Model Layer
+[ ] Unit Tests für Tree Builder
+[ ] Integration Tests
+[ ] Build auf Windows testen
+[ ] Mac-Kompatibilität testen
+[ ] README mit Screenshots
+[ ] First Release (v0.1.0)
+
+## Offene Fragen
+- [ ] Windows-only oder auch Mac?
+- [ ] Block Edit New Plugin Integration Priorität?
+- [ ] Performance-Schwelle für Lazy Loading?
+
+## Notizen
+- 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen
+- Multi-Agent Setup: Researcher, Coder, Tester, Docs
