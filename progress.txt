@@ -31,7 +31,7 @@
 [ ] Lazy Loading für grosse Dokumente
 [ ] Instance Count Caching
 [ ] Keyboard Shortcuts
-[ ] Panel Icon
+[x] Panel Icon (manifest.yml vorbereitet)
 [ ] Error Handling & Edge Cases
 
 ## Phase 5: Testing & Release
@@ -42,6 +42,14 @@
 [ ] Mac-Kompatibilität testen
 [ ] README mit Screenshots
 [ ] First Release (v0.1.0)
+
+## Phase 6: Distribution (Yak Package Manager) 📦
+[x] manifest.yml erstellt
+[x] PACKAGING.md Dokumentation
+[ ] Icon erstellen (256x256 PNG)
+[ ] Build-Script für Packaging
+[ ] Test-Server Deployment
+[ ] Production Release
 
 ## Offene Fragen
 - [ ] Windows-only oder auch Mac?

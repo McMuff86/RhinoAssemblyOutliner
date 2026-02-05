@@ -1,0 +1,19 @@
+---
+name: assemblyoutliner
+version: 0.1.0
+authors:
+- Adrian Muff
+description: >
+  A SolidWorks FeatureManager-style Assembly Outliner for Rhino 8.
+  Displays block hierarchies in a persistent, dockable tree structure with
+  bidirectional selection, visibility controls, and user attributes display.
+url: https://github.com/McMuff86/RhinoAssemblyOutliner
+icon: icon.png
+keywords:
+- blocks
+- assembly
+- outliner
+- tree
+- hierarchy
+- blocks-management
+- bom
