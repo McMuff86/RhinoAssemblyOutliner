@@ -9,6 +9,9 @@ namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 /// <summary>
 /// Service for managing per-instance component visibility.
 /// This is the main API for hiding/showing components within specific block instances.
+/// 
+/// Strategy v2: Objects stay visible and selectable. The DisplayConduit intercepts
+/// their drawing and renders only visible components.
 /// </summary>
 public class PerInstanceVisibilityService : IDisposable
 {
@@ -201,8 +204,6 @@ public class PerInstanceVisibilityService : IDisposable
     /// </summary>
     public void RefreshAll()
     {
-        _conduit.InvalidateAllCaches();
-        
         // Re-evaluate all instances with visibility data
         foreach (var obj in _doc.Objects.GetObjectList(ObjectType.InstanceReference))
         {

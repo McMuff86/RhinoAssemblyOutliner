@@ -65,7 +65,25 @@
 [ ] Persistenz (UserText) - Phase 2
 [ ] Recent Assemblies Liste - Phase 2
 
+## Phase 8: Per-Instance Component Visibility 🔬 (Experimental)
+# Game-changer Feature: Hide components within ONE instance only (not native in Rhino)
+[x] Research: DisplayConduit approach, API limitations analysiert
+[x] ComponentVisibilityData (UserData für State-Speicherung)
+[x] PerInstanceVisibilityConduit (DisplayConduit für Custom Drawing)
+[x] PerInstanceVisibilityService (API für hide/show/toggle)
+[x] TestPerInstanceVisibilityCommand (Testbefehl)
+[x] v1: Hide-Ansatz - funktioniert aber Objekte nicht selektierbar!
+[x] v2: PreDrawObject intercept - Objekte bleiben selektierbar ✅
+[x] PER_INSTANCE_VISIBILITY.md Dokumentation
+[~] Testen ob Selection jetzt funktioniert
+[ ] Integration in Outliner UI (Toggle per Component)
+[ ] Performance Testing mit vielen Instanzen
+[ ] Material/Color korrekt übernehmen
+[ ] Nested Blocks testen
+[ ] C++ Fallback falls Performance nicht reicht
+
 ## Notizen
 - 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen
 - Multi-Agent Setup: Researcher, Coder, Tester, Docs
 - 2026-02-05 11:00: Assembly Mode Phase 1 implementiert
+- 2026-02-05 11:20: Per-Instance Visibility PoC implementiert (DisplayConduit Ansatz)

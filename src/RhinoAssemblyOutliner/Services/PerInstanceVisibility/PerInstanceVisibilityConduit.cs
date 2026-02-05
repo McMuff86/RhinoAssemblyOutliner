@@ -11,10 +11,14 @@ namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 /// <summary>
 /// DisplayConduit that enables per-instance component visibility.
 /// 
-/// Strategy:
-/// 1. Instances with hidden components are set to Hidden mode (native Rhino)
-/// 2. This conduit draws only the visible components with proper transforms
-/// 3. Visibility state is stored in ComponentVisibilityData UserData
+/// Strategy v2 (REVISED - keeps objects selectable):
+/// 1. Instances with hidden components remain VISIBLE and SELECTABLE
+/// 2. PreDrawObject intercepts drawing and skips default rendering
+/// 3. We draw only the visible components ourselves
+/// 4. Visibility state stored in ComponentVisibilityData UserData
+/// 
+/// Key insight: Don't hide objects! Intercept their draw call instead.
+/// This keeps Rhino's selection system working.
 /// </summary>
 public class PerInstanceVisibilityConduit : DisplayConduit
 {
@@ -23,8 +27,8 @@ public class PerInstanceVisibilityConduit : DisplayConduit
     // Cache of managed instances (those with hidden components)
     private readonly HashSet<Guid> _managedInstances = new();
     
-    // Cache for display meshes per definition component (for performance)
-    private readonly Dictionary<Guid, DisplayMeshCache> _meshCache = new();
+    // Track which instances we've already drawn this frame (avoid double-draw)
+    private readonly HashSet<Guid> _drawnThisFrame = new();
 
     public PerInstanceVisibilityConduit(RhinoDoc doc)
     {
@@ -33,18 +37,13 @@ public class PerInstanceVisibilityConduit : DisplayConduit
 
     /// <summary>
     /// Register an instance as managed (has hidden components).
-    /// The instance will be hidden and we'll draw it custom.
+    /// Object stays visible and selectable - we just intercept its drawing.
     /// </summary>
     public void RegisterManagedInstance(Guid instanceId)
     {
         _managedInstances.Add(instanceId);
-        
-        // Hide the original instance
-        var obj = _doc.Objects.FindId(instanceId);
-        if (obj != null && obj.Visible)
-        {
-            _doc.Objects.Hide(instanceId, ignoreLayerMode: true);
-        }
+        // NOTE: We do NOT hide the object anymore!
+        // It stays visible for selection, we just override how it's drawn.
     }
 
     /// <summary>
@@ -53,13 +52,6 @@ public class PerInstanceVisibilityConduit : DisplayConduit
     public void UnregisterManagedInstance(Guid instanceId)
     {
         _managedInstances.Remove(instanceId);
-        
-        // Show the original instance again
-        var obj = _doc.Objects.FindId(instanceId);
-        if (obj != null && !obj.Visible)
-        {
-            _doc.Objects.Show(instanceId, ignoreLayerMode: true);
-        }
     }
 
     /// <summary>
@@ -72,53 +64,50 @@ public class PerInstanceVisibilityConduit : DisplayConduit
     /// </summary>
     public void ClearAllManaged()
     {
-        foreach (var id in _managedInstances)
-        {
-            _doc.Objects.Show(id, ignoreLayerMode: true);
-        }
         _managedInstances.Clear();
-    }
-
-    /// <summary>
-    /// Invalidate mesh cache for a definition.
-    /// Call when definition changes.
-    /// </summary>
-    public void InvalidateCache(Guid definitionId)
-    {
-        _meshCache.Remove(definitionId);
-    }
-
-    public void InvalidateAllCaches()
-    {
-        _meshCache.Clear();
     }
 
     protected override void CalculateBoundingBox(CalculateBoundingBoxEventArgs e)
     {
         base.CalculateBoundingBox(e);
-
-        // Include bounding boxes of all managed instances
-        foreach (var instanceId in _managedInstances)
-        {
-            var obj = _doc.Objects.FindId(instanceId) as InstanceObject;
-            if (obj == null) continue;
-
-            var bbox = obj.Geometry.GetBoundingBox(true);
-            e.IncludeBoundingBox(bbox);
-        }
+        // BoundingBox is automatically correct since objects aren't hidden
     }
 
     protected override void PreDrawObjects(DrawEventArgs e)
     {
         base.PreDrawObjects(e);
-
-        foreach (var instanceId in _managedInstances)
-        {
-            DrawManagedInstance(e, instanceId);
-        }
+        // Clear the "drawn this frame" tracker at the start of each frame
+        _drawnThisFrame.Clear();
     }
 
-    private void DrawManagedInstance(DrawEventArgs e, Guid instanceId)
+    /// <summary>
+    /// Intercept drawing of individual objects.
+    /// For managed instances, we skip the default draw and do our own.
+    /// </summary>
+    protected override void PreDrawObject(DrawObjectEventArgs e)
+    {
+        base.PreDrawObject(e);
+
+        // Check if this is a managed instance
+        if (e.RhinoObject == null || !_managedInstances.Contains(e.RhinoObject.Id))
+            return;
+
+        // Don't draw the same instance twice in one frame
+        if (_drawnThisFrame.Contains(e.RhinoObject.Id))
+        {
+            e.DrawObject = false;
+            return;
+        }
+
+        // Skip Rhino's default drawing - we'll do it ourselves
+        e.DrawObject = false;
+        _drawnThisFrame.Add(e.RhinoObject.Id);
+
+        // Draw our custom version with hidden components filtered out
+        DrawManagedInstance(e, e.RhinoObject.Id);
+    }
+
+    private void DrawManagedInstance(DrawObjectEventArgs e, Guid instanceId)
     {
         var instanceObj = _doc.Objects.FindId(instanceId) as InstanceObject;
         if (instanceObj == null) return;
@@ -132,8 +121,8 @@ public class PerInstanceVisibilityConduit : DisplayConduit
         
         if (visData == null || !visData.HasHiddenComponents)
         {
-            // No hidden components - shouldn't be managed, but draw anyway
-            DrawFullInstance(e, instanceObj);
+            // No hidden components - let Rhino draw it normally
+            // (This shouldn't happen if properly managed, but safety first)
             return;
         }
 
@@ -150,25 +139,12 @@ public class PerInstanceVisibilityConduit : DisplayConduit
                 continue;
 
             var defObj = defObjects[i];
-            DrawDefinitionObject(e, defObj, xform, instanceObj.Attributes);
+            DrawDefinitionObject(e.Display, defObj, xform, instanceObj.Attributes);
         }
     }
 
-    private void DrawFullInstance(DrawEventArgs e, InstanceObject instanceObj)
-    {
-        var instanceDef = instanceObj.InstanceDefinition;
-        if (instanceDef == null) return;
-
-        var xform = instanceObj.InstanceXform;
-        var defObjects = instanceDef.GetObjects();
-
-        foreach (var defObj in defObjects)
-        {
-            DrawDefinitionObject(e, defObj, xform, instanceObj.Attributes);
-        }
-    }
-
-    private void DrawDefinitionObject(DrawEventArgs e, RhinoObject defObj, Transform xform, ObjectAttributes instanceAttrs)
+    private void DrawDefinitionObject(DisplayPipeline display, RhinoObject defObj, 
+        Transform xform, ObjectAttributes instanceAttrs)
     {
         var geom = defObj.Geometry;
         if (geom == null) return;
@@ -186,71 +162,70 @@ public class PerInstanceVisibilityConduit : DisplayConduit
         switch (dupGeom)
         {
             case Mesh mesh:
-                DrawMesh(e, mesh, material, color);
+                DrawMesh(display, mesh, material, color);
                 break;
 
             case Brep brep:
-                DrawBrep(e, brep, material, color);
+                DrawBrep(display, brep, material, color);
                 break;
 
             case Curve curve:
-                e.Display.DrawCurve(curve, color);
+                display.DrawCurve(curve, color);
                 break;
 
             case Rhino.Geometry.Point point:
-                e.Display.DrawPoint(point.Location, color);
+                display.DrawPoint(point.Location, color);
                 break;
 
             case Extrusion extrusion:
                 var extBrep = extrusion.ToBrep();
                 if (extBrep != null)
-                    DrawBrep(e, extBrep, material, color);
+                    DrawBrep(display, extBrep, material, color);
                 break;
 
             // Handle nested blocks recursively
             case InstanceReferenceGeometry nestedRef:
-                DrawNestedInstance(e, nestedRef, xform, instanceAttrs);
+                DrawNestedInstance(display, nestedRef, xform, instanceAttrs);
                 break;
 
             default:
-                // Fallback: try to draw as wireframe
-                e.Display.DrawObject(defObj, xform);
+                // Fallback: try to draw with transform
+                display.DrawObject(defObj, xform);
                 break;
         }
     }
 
-    private void DrawMesh(DrawEventArgs e, Mesh mesh, DisplayMaterial material, Color color)
+    private void DrawMesh(DisplayPipeline display, Mesh mesh, DisplayMaterial material, Color color)
     {
-        // Draw shaded in shaded modes, wireframe in wireframe
-        var viewportMode = e.Display.Viewport.DisplayMode;
+        var viewportMode = display.Viewport.DisplayMode;
         
         if (viewportMode.EnglishName.ToLower().Contains("wireframe"))
         {
-            e.Display.DrawMeshWires(mesh, color);
+            display.DrawMeshWires(mesh, color);
         }
         else
         {
-            e.Display.DrawMeshShaded(mesh, material);
-            e.Display.DrawMeshWires(mesh, Color.FromArgb(50, color));
+            display.DrawMeshShaded(mesh, material);
+            display.DrawMeshWires(mesh, Color.FromArgb(50, color));
         }
     }
 
-    private void DrawBrep(DrawEventArgs e, Brep brep, DisplayMaterial material, Color color)
+    private void DrawBrep(DisplayPipeline display, Brep brep, DisplayMaterial material, Color color)
     {
-        var viewportMode = e.Display.Viewport.DisplayMode;
+        var viewportMode = display.Viewport.DisplayMode;
 
         if (viewportMode.EnglishName.ToLower().Contains("wireframe"))
         {
-            e.Display.DrawBrepWires(brep, color);
+            display.DrawBrepWires(brep, color);
         }
         else
         {
-            e.Display.DrawBrepShaded(brep, material);
-            e.Display.DrawBrepWires(brep, Color.FromArgb(50, color));
+            display.DrawBrepShaded(brep, material);
+            display.DrawBrepWires(brep, Color.FromArgb(50, color));
         }
     }
 
-    private void DrawNestedInstance(DrawEventArgs e, InstanceReferenceGeometry nestedRef, 
+    private void DrawNestedInstance(DisplayPipeline display, InstanceReferenceGeometry nestedRef, 
         Transform parentXform, ObjectAttributes instanceAttrs)
     {
         // Get the nested definition
@@ -264,7 +239,7 @@ public class PerInstanceVisibilityConduit : DisplayConduit
         var defObjects = nestedDef.GetObjects();
         foreach (var defObj in defObjects)
         {
-            DrawDefinitionObject(e, defObj, combinedXform, instanceAttrs);
+            DrawDefinitionObject(display, defObj, combinedXform, instanceAttrs);
         }
     }
 
@@ -295,14 +270,5 @@ public class PerInstanceVisibilityConduit : DisplayConduit
         material.Specular = Color.White;
         material.Shine = 0.5;
         return material;
-    }
-
-    /// <summary>
-    /// Cache for display meshes to improve performance.
-    /// </summary>
-    private class DisplayMeshCache
-    {
-        public Dictionary<int, Mesh[]> ComponentMeshes { get; } = new();
-        public DateTime Created { get; } = DateTime.Now;
     }
 }
