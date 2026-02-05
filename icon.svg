@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background -->
+  <rect width="256" height="256" rx="32" fill="#2D3748"/>
+  
+  <!-- Tree structure lines -->
+  <line x1="64" y1="64" x2="64" y2="192" stroke="#4A5568" stroke-width="4"/>
+  <line x1="64" y1="96" x2="96" y2="96" stroke="#4A5568" stroke-width="4"/>
+  <line x1="64" y1="144" x2="96" y2="144" stroke="#4A5568" stroke-width="4"/>
+  <line x1="64" y1="192" x2="96" y2="192" stroke="#4A5568" stroke-width="4"/>
+  
+  <!-- Root block (document) -->
+  <rect x="48" y="48" width="32" height="32" rx="4" fill="#4299E1"/>
+  
+  <!-- Child blocks -->
+  <rect x="96" y="80" width="96" height="32" rx="4" fill="#48BB78"/>
+  <rect x="96" y="128" width="96" height="32" rx="4" fill="#ED8936"/>
+  <rect x="96" y="176" width="96" height="32" rx="4" fill="#9F7AEA"/>
+  
+  <!-- Nested indicator -->
+  <line x1="160" y1="112" x2="160" y2="128" stroke="#4A5568" stroke-width="3"/>
+  <rect x="144" y="120" width="48" height="20" rx="3" fill="#F6AD55"/>
+</svg>
