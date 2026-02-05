@@ -56,6 +56,16 @@
 - [ ] Block Edit New Plugin Integration Priorität?
 - [ ] Performance-Schwelle für Lazy Loading?
 
+## Phase 7: Assembly Mode Feature 🆕
+[x] OutlinerViewMode enum
+[x] Mode dropdown in toolbar
+[x] "Set as Assembly Root" im Kontextmenü
+[x] BuildTreeFromRoot() für gefilterten Tree
+[x] Session-basierter Mode State
+[ ] Persistenz (UserText) - Phase 2
+[ ] Recent Assemblies Liste - Phase 2
+
 ## Notizen
 - 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen
 - Multi-Agent Setup: Researcher, Coder, Tester, Docs
+- 2026-02-05 11:00: Assembly Mode Phase 1 implementiert
