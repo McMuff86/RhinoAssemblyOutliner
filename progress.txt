@@ -65,7 +65,7 @@
 [ ] Persistenz (UserText) - Phase 2
 [ ] Recent Assemblies Liste - Phase 2
 
-## Phase 8: Per-Instance Component Visibility 🔬 (Experimental)
+## Phase 8: Per-Instance Component Visibility 🔬 (C# PoC - ABGESCHLOSSEN)
 # Game-changer Feature: Hide components within ONE instance only (not native in Rhino)
 [x] Research: DisplayConduit approach, API limitations analysiert
 [x] ComponentVisibilityData (UserData für State-Speicherung)
@@ -74,13 +74,25 @@
 [x] TestPerInstanceVisibilityCommand (Testbefehl)
 [x] v1: Hide-Ansatz - funktioniert aber Objekte nicht selektierbar!
 [x] v2: PreDrawObject intercept - Objekte bleiben selektierbar ✅
+[x] Real-World Testing mit komplexem Block (Schiebetür, 26+ Komponenten)
 [x] PER_INSTANCE_VISIBILITY.md Dokumentation
-[~] Testen ob Selection jetzt funktioniert
-[ ] Integration in Outliner UI (Toggle per Component)
-[ ] Performance Testing mit vielen Instanzen
-[ ] Material/Color korrekt übernehmen
-[ ] Nested Blocks testen
-[ ] C++ Fallback falls Performance nicht reicht
+
+### PoC Ergebnis: Konzept validiert, aber C++ nötig für Production
+- ✅ Per-Instance Visibility funktioniert grundsätzlich
+- ✅ Selection funktioniert (v2)
+- ❌ Ghost Artifacts bei Transforms
+- ❌ Selection Highlight fehlt
+- ❌ Display Cache Integration fehlt
+
+## Phase 9: C++ SDK Implementation 🔧 (NÄCHSTER SCHRITT)
+# Siehe docs/CPP_ROADMAP.md
+[ ] Rhino 8 C++ SDK Setup
+[ ] Hello World C++ Plugin
+[ ] CRhinoDisplayConduit Research
+[ ] Block-Rendering Analysis
+[ ] C++ Core: Visibility Conduit
+[ ] C#/C++ Integration (P/Invoke)
+[ ] UI Integration im Outliner
 
 ## Notizen
 - 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen

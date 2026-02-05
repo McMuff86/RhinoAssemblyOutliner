@@ -80,13 +80,38 @@ var combinedXform = nestedRef.Xform * parentXform;
 2. **Selection Highlight** - Noch nicht implementiert
 3. **Performance** - Bei vielen managed instances evtl. C++ nötig
 
-## Nächste Schritte
+## PoC Ergebnisse (2026-02-05)
 
-- [ ] Integration in Outliner UI (Toggle per Zeile)
-- [ ] Material korrekt übernehmen
-- [ ] Selection Highlight für managed instances
-- [ ] Performance Testing mit 100+ managed instances
-- [ ] C++ Fallback evaluieren falls nötig
+### Was funktioniert ✅
+- Per-Instance Component Visibility grundsätzlich möglich
+- UserData speichert State pro Instanz (persistiert)
+- Objekte bleiben selektierbar (v2 mit PreDrawObject)
+- Komponenten können individuell ein/ausgeblendet werden
+
+### Was NICHT funktioniert ❌
+- **Ghost Artifacts**: Beim Verschieben/Transformieren bleiben alte Zeichnungen stehen
+- **Selection Highlight**: Selektierte Objekte leuchten nicht gelb
+- **Display Cache**: Rhino's Invalidation kennt unsere Geometrie nicht
+- **Redraw hilft nicht**: Ctrl+Shift+V löst das Problem nicht
+
+### Fazit
+**C# DisplayConduit ist für PoC geeignet, aber nicht für Production.**
+
+Der fundamentale Konflikt: Wir zeichnen Geometrie ausserhalb von Rhino's Display Pipeline, daher:
+- Rhino weiss nicht welche Screen-Regionen invalidiert werden müssen
+- Kein korrektes Caching/Buffering
+- Transforms brechen das Rendering
+
+**Empfehlung: C++ SDK für Production-Implementation**
+
+Siehe: [CPP_ROADMAP.md](./CPP_ROADMAP.md)
+
+## Archivierte Nächste Schritte (C# Ansatz - NICHT weiterverfolgen)
+
+- [ ] ~~Integration in Outliner UI (Toggle per Zeile)~~
+- [ ] ~~Material korrekt übernehmen~~
+- [ ] ~~Selection Highlight für managed instances~~
+- [ ] ~~Performance Testing mit 100+ managed instances~~
 
 ## Referenzen
 
