@@ -522,6 +522,7 @@ public class AssemblyTreeItem : TreeGridItem
 
         // Set values for columns
         string visibilityIcon = node.IsVisible ? "👁" : "◯";
+        string typeIcon = "";
         string layerName = "";
         string typeName = "";
 
@@ -529,17 +530,31 @@ public class AssemblyTreeItem : TreeGridItem
         {
             layerName = blockNode.Layer?.FullPath ?? "";
             typeName = blockNode.LinkType.ToString();
+            
+            // Block type icons
+            typeIcon = blockNode.LinkType switch
+            {
+                Rhino.DocObjects.InstanceDefinitionUpdateType.Linked => "🔗",           // Linked block
+                Rhino.DocObjects.InstanceDefinitionUpdateType.LinkedAndEmbedded => "📎", // Linked & Embedded
+                _ => "📦"  // Embedded (default)
+            };
         }
         else if (node is DocumentNode docNode)
         {
             typeName = "Document";
-            visibilityIcon = "📄";  // Document icon
+            typeIcon = "📄";
+            visibilityIcon = "";  // No visibility toggle for document
         }
+
+        // Format: "Icon Name #n" for display
+        string displayName = string.IsNullOrEmpty(typeIcon) 
+            ? node.DisplayName 
+            : $"{typeIcon} {node.DisplayName}";
 
         Values = new object[]
         {
             visibilityIcon,
-            node.DisplayName,
+            displayName,
             layerName,
             typeName
         };

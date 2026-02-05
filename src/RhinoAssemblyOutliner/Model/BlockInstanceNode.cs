@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.Geometry;
@@ -51,6 +52,11 @@ public class BlockInstanceNode : AssemblyNode
     public string? LinkedFilePath { get; }
 
     /// <summary>
+    /// User-defined key-value attributes (UserText).
+    /// </summary>
+    public Dictionary<string, string> UserAttributes { get; }
+
+    /// <summary>
     /// Creates a new block instance node.
     /// </summary>
     /// <param name="instance">The Rhino InstanceObject.</param>
@@ -66,6 +72,17 @@ public class BlockInstanceNode : AssemblyNode
         InstanceTransform = instance.InstanceXform;
         LinkType = definition.UpdateType;
         LinkedFilePath = definition.IsLinkedDefinition ? definition.SourceArchive : null;
+        
+        // Get user attributes (UserText)
+        UserAttributes = new Dictionary<string, string>();
+        var userStrings = instance.Attributes.GetUserStrings();
+        if (userStrings != null)
+        {
+            foreach (string key in userStrings.AllKeys)
+            {
+                UserAttributes[key] = userStrings[key];
+            }
+        }
         
         // Get layer from the instance
         var doc = RhinoDoc.ActiveDoc;
@@ -92,6 +109,7 @@ public class BlockInstanceNode : AssemblyNode
         LinkType = definition.UpdateType;
         LinkedFilePath = definition.IsLinkedDefinition ? definition.SourceArchive : null;
         TotalInstanceCount = definition.UseCount();
+        UserAttributes = new Dictionary<string, string>();
     }
 
     /// <summary>
@@ -134,7 +152,17 @@ public class BlockInstanceNode : AssemblyNode
             summary += $"Source: {LinkedFilePath}\n";
         }
         
-        summary += $"Children: {Children.Count}";
+        summary += $"Children: {Children.Count}\n";
+        
+        // User attributes
+        if (UserAttributes.Count > 0)
+        {
+            summary += "\n--- User Attributes ---\n";
+            foreach (var kvp in UserAttributes)
+            {
+                summary += $"{kvp.Key}: {kvp.Value}\n";
+            }
+        }
         
         return summary;
     }

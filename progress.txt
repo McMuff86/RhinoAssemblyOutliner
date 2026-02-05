@@ -24,8 +24,8 @@
 [x] VisibilityService (Show/Hide/Isolate)
 [x] Visibility Toggle im Tree (Auge-Icon Spalte)
 [x] Context Menu (Rechtsklick-Aktionen)
-[ ] Icons für Block-Typen (Embedded/Linked)
-[ ] User Attributes Anzeige (UserText)
+[x] Icons für Block-Typen (📦 Embedded, 🔗 Linked, 📎 LinkedAndEmbedded)
+[x] User Attributes Anzeige (UserText in Detail Panel)
 
 ## Phase 4: Polish & Performance
 [ ] Lazy Loading für grosse Dokumente
