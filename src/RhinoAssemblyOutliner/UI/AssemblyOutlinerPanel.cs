@@ -7,6 +7,7 @@ using Rhino.DocObjects;
 using Rhino.DocObjects.Tables;
 using Rhino.UI;
 using RhinoAssemblyOutliner.Model;
+using RhinoAssemblyOutliner.Services;
 
 namespace RhinoAssemblyOutliner.UI;
 
@@ -22,6 +23,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private DetailPanel _detailPanel;
     private SearchBox _searchBox;
     private DocumentNode _rootNode;
+    private VisibilityService _visibilityService;
     
     // Event debouncing
     private Timer _refreshTimer;
@@ -66,6 +68,9 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _treeView = new AssemblyTreeView();
         _treeView.SelectionChanged += OnTreeSelectionChanged;
         _treeView.NodeActivated += OnTreeNodeActivated;
+        _treeView.VisibilityToggleRequested += OnVisibilityToggleRequested;
+        _treeView.IsolateRequested += OnIsolateRequested;
+        _treeView.ShowAllRequested += OnShowAllRequested;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -280,6 +285,36 @@ public class AssemblyOutlinerPanel : Panel, IPanel
             {
                 blockNode.ZoomToInstance(doc);
             }
+        }
+    }
+
+    private void OnVisibilityToggleRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.ToggleVisibility(node);
+        _treeView.ReloadData();
+    }
+
+    private void OnIsolateRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Isolate(node);
+        _treeView.ReloadData();
+    }
+
+    private void OnShowAllRequested(object sender, EventArgs e)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.ShowAll();
+        RefreshTree();
+    }
+
+    private void EnsureVisibilityService()
+    {
+        var doc = RhinoDoc.ActiveDoc;
+        if (doc != null && _visibilityService == null)
+        {
+            _visibilityService = new VisibilityService(doc);
         }
     }
 

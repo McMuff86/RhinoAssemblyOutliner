@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Eto.Drawing;
 using Eto.Forms;
+using Rhino;
 using RhinoAssemblyOutliner.Model;
+using RhinoAssemblyOutliner.Services;
 
 namespace RhinoAssemblyOutliner.UI;
 
@@ -24,6 +27,21 @@ public class AssemblyTreeView : TreeGridView
     /// Raised when a node is activated (double-clicked).
     /// </summary>
     public event EventHandler<AssemblyNode> NodeActivated;
+
+    /// <summary>
+    /// Raised when visibility toggle is requested.
+    /// </summary>
+    public event EventHandler<AssemblyNode> VisibilityToggleRequested;
+
+    /// <summary>
+    /// Raised when isolate is requested.
+    /// </summary>
+    public event EventHandler<AssemblyNode> IsolateRequested;
+
+    /// <summary>
+    /// Raised when show all is requested.
+    /// </summary>
+    public event EventHandler ShowAllRequested;
 
     public AssemblyTreeView()
     {
@@ -61,7 +79,180 @@ public class AssemblyTreeView : TreeGridView
         SelectedItemChanged += OnSelectedItemChanged;
         Activated += OnActivated;
         CellFormatting += OnCellFormatting;
+        
+        // Context menu
+        ContextMenu = BuildContextMenu();
     }
+
+    /// <summary>
+    /// Builds the right-click context menu.
+    /// </summary>
+    private ContextMenu BuildContextMenu()
+    {
+        var menu = new ContextMenu();
+
+        var selectItem = new ButtonMenuItem { Text = "Select in Viewport" };
+        selectItem.Click += (s, e) => SelectCurrentInViewport();
+
+        var selectAllItem = new ButtonMenuItem { Text = "Select All Instances" };
+        selectAllItem.Click += (s, e) => SelectAllInstances();
+
+        var zoomItem = new ButtonMenuItem { Text = "Zoom To" };
+        zoomItem.Click += (s, e) => ZoomToSelected();
+
+        var separator1 = new SeparatorMenuItem();
+
+        var hideItem = new ButtonMenuItem { Text = "Hide" };
+        hideItem.Click += (s, e) => OnHideClicked();
+
+        var showItem = new ButtonMenuItem { Text = "Show" };
+        showItem.Click += (s, e) => OnShowClicked();
+
+        var isolateItem = new ButtonMenuItem { Text = "Isolate" };
+        isolateItem.Click += (s, e) => OnIsolateClicked();
+
+        var showAllItem = new ButtonMenuItem { Text = "Show All" };
+        showAllItem.Click += (s, e) => ShowAllRequested?.Invoke(this, EventArgs.Empty);
+
+        var separator2 = new SeparatorMenuItem();
+
+        var expandItem = new ButtonMenuItem { Text = "Expand Children" };
+        expandItem.Click += (s, e) => ExpandSelected();
+
+        var collapseItem = new ButtonMenuItem { Text = "Collapse Children" };
+        collapseItem.Click += (s, e) => CollapseSelected();
+
+        menu.Items.Add(selectItem);
+        menu.Items.Add(selectAllItem);
+        menu.Items.Add(zoomItem);
+        menu.Items.Add(separator1);
+        menu.Items.Add(hideItem);
+        menu.Items.Add(showItem);
+        menu.Items.Add(isolateItem);
+        menu.Items.Add(showAllItem);
+        menu.Items.Add(separator2);
+        menu.Items.Add(expandItem);
+        menu.Items.Add(collapseItem);
+
+        return menu;
+    }
+
+    #region Context Menu Actions
+
+    private void SelectCurrentInViewport()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item?.Node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
+        {
+            var doc = RhinoDoc.ActiveDoc;
+            if (doc != null)
+            {
+                doc.Objects.UnselectAll();
+                doc.Objects.Select(blockNode.InstanceId, true);
+                doc.Views.Redraw();
+            }
+        }
+    }
+
+    private void SelectAllInstances()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item?.Node is BlockInstanceNode blockNode)
+        {
+            var doc = RhinoDoc.ActiveDoc;
+            if (doc != null)
+            {
+                var definition = doc.InstanceDefinitions[blockNode.BlockDefinitionIndex];
+                if (definition != null && !definition.IsDeleted)
+                {
+                    doc.Objects.UnselectAll();
+                    var instances = definition.GetReferences(1);
+                    foreach (var instance in instances)
+                    {
+                        doc.Objects.Select(instance.Id, true);
+                    }
+                    doc.Views.Redraw();
+                }
+            }
+        }
+    }
+
+    private void ZoomToSelected()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item?.Node is BlockInstanceNode blockNode)
+        {
+            var doc = RhinoDoc.ActiveDoc;
+            blockNode.ZoomToInstance(doc);
+        }
+    }
+
+    private void OnHideClicked()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item != null)
+        {
+            VisibilityToggleRequested?.Invoke(this, item.Node);
+        }
+    }
+
+    private void OnShowClicked()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item != null)
+        {
+            VisibilityToggleRequested?.Invoke(this, item.Node);
+        }
+    }
+
+    private void OnIsolateClicked()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item != null)
+        {
+            IsolateRequested?.Invoke(this, item.Node);
+        }
+    }
+
+    private void ExpandSelected()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item != null)
+        {
+            ExpandItemRecursive(item);
+            ReloadData();
+        }
+    }
+
+    private void CollapseSelected()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item != null)
+        {
+            CollapseItemRecursive(item);
+            ReloadData();
+        }
+    }
+
+    private void ExpandItemRecursive(TreeGridItem item)
+    {
+        item.Expanded = true;
+        foreach (var child in item.Children.OfType<TreeGridItem>())
+        {
+            ExpandItemRecursive(child);
+        }
+    }
+
+    private void CollapseItemRecursive(TreeGridItem item)
+    {
+        item.Expanded = false;
+        foreach (var child in item.Children.OfType<TreeGridItem>())
+        {
+            CollapseItemRecursive(child);
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Loads the tree from a document root node.
