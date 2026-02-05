@@ -43,6 +43,11 @@ public class AssemblyTreeView : TreeGridView
     /// </summary>
     public event EventHandler ShowAllRequested;
 
+    /// <summary>
+    /// Raised when "Set as Assembly Root" is requested.
+    /// </summary>
+    public event EventHandler<BlockInstanceNode> SetAsAssemblyRootRequested;
+
     public AssemblyTreeView()
     {
         _itemLookup = new Dictionary<Guid, AssemblyTreeItem>();
@@ -154,6 +159,11 @@ public class AssemblyTreeView : TreeGridView
         showAllItem.Click += (s, e) => ShowAllRequested?.Invoke(this, EventArgs.Empty);
 
         var separator2 = new SeparatorMenuItem();
+        
+        var setAsRootItem = new ButtonMenuItem { Text = "📌 Set as Assembly Root" };
+        setAsRootItem.Click += (s, e) => OnSetAsAssemblyRootClicked();
+
+        var separator3 = new SeparatorMenuItem();
 
         var expandItem = new ButtonMenuItem { Text = "Expand Children" };
         expandItem.Click += (s, e) => ExpandSelected();
@@ -170,6 +180,8 @@ public class AssemblyTreeView : TreeGridView
         menu.Items.Add(isolateItem);
         menu.Items.Add(showAllItem);
         menu.Items.Add(separator2);
+        menu.Items.Add(setAsRootItem);
+        menu.Items.Add(separator3);
         menu.Items.Add(expandItem);
         menu.Items.Add(collapseItem);
 
@@ -291,6 +303,15 @@ public class AssemblyTreeView : TreeGridView
         }
     }
 
+    private void OnSetAsAssemblyRootClicked()
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item?.Node is BlockInstanceNode blockNode)
+        {
+            SetAsAssemblyRootRequested?.Invoke(this, blockNode);
+        }
+    }
+
     #endregion
 
     /// <summary>
@@ -305,6 +326,27 @@ public class AssemblyTreeView : TreeGridView
 
         // Add document root
         var rootItem = new AssemblyTreeItem(rootNode);
+        RegisterItemRecursive(rootItem);
+        collection.Add(rootItem);
+
+        DataStore = collection;
+
+        // Expand root by default
+        rootItem.Expanded = true;
+    }
+    
+    /// <summary>
+    /// Loads the tree from a block instance node (Assembly Mode).
+    /// </summary>
+    public void LoadTreeFromBlock(BlockInstanceNode blockNode)
+    {
+        _rootNode = null; // No document root in assembly mode
+        _itemLookup.Clear();
+
+        var collection = new TreeGridItemCollection();
+
+        // Add block as root
+        var rootItem = new AssemblyTreeItem(blockNode);
         RegisterItemRecursive(rootItem);
         collection.Add(rootItem);
 

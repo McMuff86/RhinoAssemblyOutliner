@@ -34,6 +34,36 @@ public class AssemblyTreeBuilder
     private const int MaxRecursionDepth = 100;
 
     /// <summary>
+    /// Builds the tree for a specific block instance (Assembly Mode).
+    /// </summary>
+    /// <param name="assemblyRootId">The GUID of the block instance to use as root.</param>
+    /// <returns>The block instance node as root, or null if not found.</returns>
+    public BlockInstanceNode BuildTreeFromRoot(Guid assemblyRootId)
+    {
+        try
+        {
+            _definitionInstanceCounters.Clear();
+            _definitionTotalCounts.Clear();
+            _visitedDefinitions = new HashSet<int>();
+            
+            CalculateTotalInstanceCounts();
+            
+            var obj = _doc.Objects.FindId(assemblyRootId);
+            if (obj is InstanceObject instance)
+            {
+                return CreateBlockInstanceNode(instance, 0);
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Error building tree from root: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Builds the complete assembly tree for the document.
     /// </summary>
     /// <returns>The root document node containing the full hierarchy.</returns>

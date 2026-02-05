@@ -23,6 +23,13 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private SearchBox _searchBox;
     private DocumentNode _rootNode;
     private VisibilityService _visibilityService;
+    private DropDown _modeDropdown;
+    private Label _modeLabel;
+    
+    // View mode state
+    private OutlinerViewMode _currentMode = OutlinerViewMode.Document;
+    private Guid _assemblyRootId = Guid.Empty;
+    private string _assemblyRootName = "";
     
     // Event debouncing
     private System.Timers.Timer _refreshTimer;
@@ -70,6 +77,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _treeView.VisibilityToggleRequested += OnVisibilityToggleRequested;
         _treeView.IsolateRequested += OnIsolateRequested;
         _treeView.ShowAllRequested += OnShowAllRequested;
+        _treeView.SetAsAssemblyRootRequested += OnSetAsAssemblyRootRequested;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -112,15 +120,81 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         var collapseAllButton = new Button { Text = "⊟", ToolTip = "Collapse All", Width = 30 };
         collapseAllButton.Click += (s, e) => _treeView.CollapseAll();
 
+        // Mode dropdown
+        _modeDropdown = new DropDown { Width = 140 };
+        _modeDropdown.Items.Add("📄 Document");
+        _modeDropdown.SelectedIndex = 0;
+        _modeDropdown.SelectedIndexChanged += OnModeDropdownChanged;
+        
+        // Mode label (shows assembly name when in Assembly mode)
+        _modeLabel = new Label { Text = "", TextColor = Colors.Gray };
+
         var layout = new StackLayout
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
             Padding = new Padding(4),
-            Items = { refreshButton, expandAllButton, collapseAllButton }
+            Items = { refreshButton, expandAllButton, collapseAllButton, _modeDropdown, _modeLabel }
         };
 
         return layout;
+    }
+    
+    /// <summary>
+    /// Handles mode dropdown change.
+    /// </summary>
+    private void OnModeDropdownChanged(object sender, EventArgs e)
+    {
+        if (_modeDropdown.SelectedIndex == 0)
+        {
+            // Document mode
+            SetDocumentMode();
+        }
+        // Other items are assembly roots - handled in the item data
+    }
+    
+    /// <summary>
+    /// Sets the outliner to Document mode (show all blocks).
+    /// </summary>
+    public void SetDocumentMode()
+    {
+        _currentMode = OutlinerViewMode.Document;
+        _assemblyRootId = Guid.Empty;
+        _assemblyRootName = "";
+        _modeLabel.Text = "";
+        _modeDropdown.SelectedIndex = 0;
+        RefreshTree();
+    }
+    
+    /// <summary>
+    /// Sets the outliner to Assembly mode with the specified root block.
+    /// </summary>
+    public void SetAssemblyMode(Guid rootId, string rootName)
+    {
+        _currentMode = OutlinerViewMode.Assembly;
+        _assemblyRootId = rootId;
+        _assemblyRootName = rootName;
+        _modeLabel.Text = $"→ {rootName}";
+        
+        // Add to dropdown if not already there
+        string itemText = $"📦 {rootName}";
+        bool found = false;
+        for (int i = 1; i < _modeDropdown.Items.Count; i++)
+        {
+            if (_modeDropdown.Items[i].Text == itemText)
+            {
+                _modeDropdown.SelectedIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            _modeDropdown.Items.Add(itemText);
+            _modeDropdown.SelectedIndex = _modeDropdown.Items.Count - 1;
+        }
+        
+        RefreshTree();
     }
 
     #region IPanel Implementation
@@ -307,6 +381,14 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _visibilityService?.ShowAll();
         RefreshTree();
     }
+    
+    private void OnSetAsAssemblyRootRequested(object sender, BlockInstanceNode blockNode)
+    {
+        if (blockNode != null && blockNode.InstanceId != Guid.Empty)
+        {
+            SetAssemblyMode(blockNode.InstanceId, blockNode.DefinitionName);
+        }
+    }
 
     private void EnsureVisibilityService()
     {
@@ -354,11 +436,30 @@ public class AssemblyOutlinerPanel : Panel, IPanel
             if (doc == null) return;
 
             var builder = new AssemblyTreeBuilder(doc);
-            _rootNode = builder.BuildTree();
             
-            if (_rootNode != null)
+            if (_currentMode == OutlinerViewMode.Assembly && _assemblyRootId != Guid.Empty)
             {
-                _treeView.LoadTree(_rootNode);
+                // Assembly mode - show only the selected root and its children
+                var assemblyRoot = builder.BuildTreeFromRoot(_assemblyRootId);
+                if (assemblyRoot != null)
+                {
+                    _treeView.LoadTreeFromBlock(assemblyRoot);
+                }
+                else
+                {
+                    // Root not found - switch back to document mode
+                    RhinoApp.WriteLine("AssemblyOutliner: Assembly root not found, switching to Document mode.");
+                    SetDocumentMode();
+                }
+            }
+            else
+            {
+                // Document mode - show all blocks
+                _rootNode = builder.BuildTree();
+                if (_rootNode != null)
+                {
+                    _treeView.LoadTree(_rootNode);
+                }
             }
         }
         catch (Exception ex)
