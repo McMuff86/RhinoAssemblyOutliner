@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    
+    <!-- Rhino Plugin Settings -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    
+    <!-- Assembly Info -->
+    <AssemblyName>RhinoAssemblyOutliner</AssemblyName>
+    <RootNamespace>RhinoAssemblyOutliner</RootNamespace>
+    <Version>0.1.0</Version>
+    <Authors>RhinoAssemblyOutliner Contributors</Authors>
+    <Description>A SolidWorks FeatureManager-style Assembly Outliner for Rhino 8</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- RhinoCommon - Rhino 8 SDK -->
+    <PackageReference Include="RhinoCommon" Version="8.0.23304.9001">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    
+    <!-- Eto.Forms - Cross-platform UI -->
+    <PackageReference Include="Eto.Forms" Version="2.8.0">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
