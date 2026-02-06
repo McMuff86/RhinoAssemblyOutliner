@@ -1,6 +1,12 @@
-; RhinoAssemblyOutliner.native.def : Declares the module parameters for the DLL.
+; RhinoAssemblyOutliner.Native.def : Exported functions for P/Invoke
 
-LIBRARY
+LIBRARY "RhinoAssemblyOutliner.Native"
 
 EXPORTS
-    ; Explicit exports can go here
+    NativeInit
+    NativeCleanup
+    SetComponentVisibility
+    IsComponentVisible
+    GetHiddenComponentCount
+    ResetComponentVisibility
+    GetNativeVersion

@@ -1,179 +1,177 @@
-# AGENTS.md - Multi-Agent Setup for RhinoAssemblyOutliner
+# CLAUDE.md - RhinoAssemblyOutliner
 
-> Dokumentation des AI-gestützten Entwicklungsprozesses
+## Projekt-Übersicht
 
-## Overview
+Ein SolidWorks FeatureManager-artiger **Assembly Outliner** für Rhino 8. Zeigt Block-Hierarchien in einer dockbaren Baumstruktur.
+
+**Repo:** https://github.com/McMuff86/RhinoAssemblyOutliner
+**Stack:** C# / .NET 7.0 / RhinoCommon 8.0 / Eto.Forms + C++ / Rhino 8 C++ SDK
+
+## Architektur: Hybrid C#/C++
+
+```
+┌──────────────────────────────────────────────────────┐
+│                     Rhino 8                          │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  ┌──────────────────────┐                            │
+│  │  C# Plugin (.rhp)    │  ← Einziges Rhino Plugin  │
+│  │                      │                            │
+│  │  - Outliner Panel    │                            │
+│  │  - Commands          │     P/Invoke               │
+│  │  - Tree View         │──────────────┐             │
+│  │  - Selection Sync    │              │             │
+│  └──────────────────────┘              ▼             │
+│                            ┌──────────────────────┐  │
+│                            │  C++ DLL (.dll)      │  │
+│                            │                      │  │
+│                            │  - Display Conduit   │  │
+│                            │  - Block Rendering   │  │
+│                            │  - Visibility Logic  │  │
+│                            │  - Cache Management  │  │
+│                            └──────────────────────┘  │
+└──────────────────────────────────────────────────────┘
+```
+
+## Projekt-Struktur
+
+```
+RhinoAssemblyOutliner/
+├── RhinoAssemblyOutliner.sln              # Solution (C# + C++ Projekte)
+├── src/
+│   ├── RhinoAssemblyOutliner/             # C# Plugin (UI + Commands)
+│   │   ├── RhinoAssemblyOutlinerPlugin.cs # Plugin-Einstiegspunkt
+│   │   ├── Model/                         # Datenmodelle
+│   │   │   ├── AssemblyNode.cs            # Basis-Knoten
+│   │   │   ├── BlockInstanceNode.cs       # Block-Instanz
+│   │   │   ├── DocumentNode.cs            # Dokument-Root
+│   │   │   ├── OutlinerViewMode.cs        # Assembly/Document Mode
+│   │   │   └── AssemblyTreeBuilder.cs     # Tree-Builder
+│   │   ├── UI/                            # Eto.Forms UI
+│   │   │   ├── AssemblyOutlinerPanel.cs   # Haupt-Panel (IPanel)
+│   │   │   ├── AssemblyTreeView.cs        # TreeGridView
+│   │   │   └── DetailPanel.cs             # Properties
+│   │   ├── Commands/                      # Rhino Commands
+│   │   │   ├── OpenOutlinerCommand.cs
+│   │   │   ├── RefreshOutlinerCommand.cs
+│   │   │   └── TestPerInstanceVisibilityCommand.cs
+│   │   └── Services/                      # Business Logic
+│   │       ├── SelectionSyncService.cs
+│   │       ├── VisibilityService.cs
+│   │       └── PerInstanceVisibility/     # C# PoC (wird durch C++ ersetzt)
+│   │           ├── ComponentVisibilityData.cs
+│   │           ├── PerInstanceVisibilityConduit.cs
+│   │           └── PerInstanceVisibilityService.cs
+│   │
+│   └── RhinoAssemblyOutliner.native/      # C++ Native DLL
+│       ├── RhinoAssemblyOutliner.native.vcxproj
+│       ├── RhinoAssemblyOutliner.native.def  # Export-Definitionen
+│       ├── stdafx.h/cpp                   # Precompiled Header + Rhino SDK
+│       ├── RhinoAssemblyOutliner.nativeApp.h/cpp  # MFC DLL Entry
+│       └── NativeApi.h/cpp                # Exportierte C API (P/Invoke)
+│
+├── tests/                                 # xUnit Tests
+├── docs/
+│   ├── SPEC.md                            # Detaillierte Spezifikation
+│   ├── ARCHITECTURE.md                    # Architektur-Diagramme
+│   ├── CPP_ROADMAP.md                     # C++ Implementation Roadmap
+│   ├── CPP_SDK_RESEARCH.md               # C++ SDK API Research
+│   ├── PER_INSTANCE_VISIBILITY.md        # PoC Ergebnisse + Learnings
+│   ├── FEATURE_ASSEMBLY_MODE.md          # Assembly Mode Feature
+│   ├── PACKAGING.md                      # Yak Distribution
+│   ├── USER_GUIDE.md                     # Benutzerhandbuch
+│   └── TEST_PLAN.md                      # Testplan
+└── progress.txt                           # Task Tracker
+```
+
+## Entwicklungs-Richtlinien
+
+### Code-Stil
+- C# 11 mit nullable reference types
+- XML-Dokumentation für alle public APIs
+- `_camelCase` für private Felder
+- Ein Klasse pro File
+
+### RhinoCommon Patterns
+- Panel via `IPanel` Interface registrieren
+- Events in `PanelClosing()` unsubscriben (Memory Leaks!)
+- `RhinoApp.InvokeOnUiThread()` für UI-Updates
+- Event-Debouncing für Performance (100ms Timer)
+
+### Block-Traversierung
+```csharp
+// Rekursiv durch verschachtelte Blöcke
+for (int i = 0; i < definition.ObjectCount; i++)
+{
+    var obj = definition.Object(i);
+    if (obj is InstanceObject nested)
+        ProcessBlock(nested.InstanceDefinition);  // Rekursion
+}
+```
+
+## Wichtige Klassen
+
+| Klasse | Sprache | Zweck |
+|--------|---------|-------|
+| `AssemblyTreeBuilder` | C# | Baut den hierarchischen Baum aus RhinoDoc |
+| `AssemblyOutlinerPanel` | C# | Dockbares Panel mit IPanel Interface |
+| `BlockInstanceNode` | C# | Repräsentiert eine Block-Instanz im Baum |
+| `AssemblyTreeItem` | C# | Eto TreeGridItem Wrapper |
+| `NativeApi` | C++ | Exportierte C API für Per-Instance Visibility (P/Invoke) |
+
+## Commands
+
+- `AssemblyOutliner` - Öffnet das Panel
+- `AssemblyOutlinerRefresh` - Aktualisiert den Baum manuell
+
+## Build & Test
+
+```bash
+# C# Plugin Build
+dotnet build
+
+# C++ Native DLL Build (benötigt Rhino 8 C++ SDK + MSVC v142 Toolset)
+MSBuild.exe src\RhinoAssemblyOutliner.native\RhinoAssemblyOutliner.native.vcxproj -p:Configuration=Release -p:Platform=x64
+
+# Tests
+dotnet test
+
+# In Rhino laden
+# Plugin-DLL + Native-DLL in denselben Ordner kopieren
+```
+
+### Build-Voraussetzungen C++
+- Visual Studio mit MSVC v142 (VS 2019) Toolset
+- Rhino 8 C++ SDK (installiert unter `C:\Program Files\Rhino 8 SDK\`)
+- Windows 10 SDK
+
+## Offene Design-Entscheidungen
+
+1. **Performance-Schwelle:** Ab wann Lazy Loading? (1000+ Nodes?)
+2. **Block Edit Integration:** Wie tief anbinden?
+3. **Mac-Kompatibilität:** Testen erforderlich
+
+## Ressourcen
+
+- [RhinoCommon API](https://developer.rhino3d.com/api/rhinocommon/)
+- [Eto.Forms Docs](http://pages.picoe.ca/docs/api/)
+- [Rhino Panel Sample](https://github.com/mcneel/rhino-developer-samples/tree/7/rhinocommon/cs/SampleCsEto)
+
+---
+
+## Multi-Agent Setup
 
 Dieses Projekt nutzt ein **Multi-Agent System** für effiziente Entwicklung. Jeder Agent hat spezialisierte Aufgaben.
 
----
+### Agent-Rollen
 
-## Agent-Rollen
-
-### 🧠 Coordinator (Main Agent)
-
-**Rolle:** Orchestration, Synthese, User-Kommunikation
-
-**Aufgaben:**
-- Aufgaben an Subagents delegieren
-- Ergebnisse synthetisieren
-- Finale Dokumentation erstellen
-- Git Commits & Pushes
-- User-Fragen beantworten
-
-**Arbeitet in:** Hauptsession mit User
+| Agent | Rolle | Output |
+|-------|-------|--------|
+| Coordinator | Orchestration, Synthese, User-Kommunikation | Commits, `CLAUDE.md` |
+| Research | CAD-Industrie Analyse, Best Practices | `research/` |
+| Coder | Implementation, Bug-Fixes, Tests | `src/` |
+| Docs | Dokumentation, User Guides | `docs/`, root |
 
 ---
 
-### 🔬 Research Agent
-
-**Rolle:** CAD-Industrie Analyse, Best Practices
-
-**Aufgaben:**
-- Web-Recherche zu CAD-Systemen
-- Feature-Vergleiche erstellen
-- UX-Patterns dokumentieren
-- Industry Standards identifizieren
-
-**Output:** Markdown-Dokumente in `research/`
-
-**Beispiele:**
-- `SOLIDWORKS_ANALYSIS.md` — Deep-Dive SolidWorks FeatureManager
-- `CAD_INDUSTRY_ANALYSIS.md` — Vergleich Inventor, Fusion, CATIA, NX
-
----
-
-### 💻 Coder Agent
-
-**Rolle:** Implementation, Code-Schreiben
-
-**Aufgaben:**
-- Feature-Implementation
-- Bug-Fixes
-- Code-Refactoring
-- Unit Tests
-
-**Fokus:**
-- C# für UI, Services, Commands
-- C++ für DisplayConduit, UserData (future)
-
----
-
-### 🧪 Tester Agent (Planned)
-
-**Rolle:** Quality Assurance
-
-**Aufgaben:**
-- Testpläne erstellen
-- Edge Cases identifizieren
-- Bug Reports dokumentieren
-- Regression Testing
-
----
-
-### 📝 Docs Agent
-
-**Rolle:** Dokumentation
-
-**Aufgaben:**
-- README pflegen
-- API-Docs schreiben
-- User Guides erstellen
-- Changelogs führen
-
----
-
-## Workflow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    USER REQUEST                              │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    COORDINATOR                               │
-│              (analysiert, plant, delegiert)                 │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│   RESEARCH    │ │    CODER      │ │     DOCS      │
-│    AGENT      │ │    AGENT      │ │    AGENT      │
-└───────┬───────┘ └───────┬───────┘ └───────┬───────┘
-        │                 │                 │
-        ▼                 ▼                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    COORDINATOR                               │
-│         (sammelt Ergebnisse, synthetisiert)                 │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│              COMMIT & COMMUNICATE                            │
-│         (git push, Zusammenfassung an User)                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Parallele Arbeit
-
-Agents können **parallel** arbeiten wenn ihre Tasks unabhängig sind:
-
-```
-Session 1: Research SolidWorks    ─────┐
-                                       │
-Session 2: Research CAD Industry  ─────┼───► Coordinator Synthesis
-                                       │
-Session 3: Docs Update            ─────┘
-```
-
----
-
-## File Conventions
-
-| Agent | Output Location | Naming |
-|-------|-----------------|--------|
-| Research | `research/` | `TOPIC_ANALYSIS.md` |
-| Coder | `src/` | Standard C#/C++ conventions |
-| Docs | `docs/`, root | `FEATURE.md`, `README.md` |
-| Coordinator | root | `CLAUDE.md`, `AGENTS.md`, commits |
-
----
-
-## Session Tracking
-
-Jede Agent-Session wird in `progress.txt` dokumentiert:
-
-```
-## Phase X: Feature Name
-[x] Task 1 (Agent: Research)
-[x] Task 2 (Agent: Coder)
-[ ] Task 3 (Agent: Docs)
-```
-
----
-
-## Current Agent Activity (2026-02-05)
-
-| Agent | Status | Current Task |
-|-------|--------|--------------|
-| Coordinator | ✅ Active | Synthesis & Doc Updates |
-| Research (SW) | ✅ Completed | SolidWorks Analysis |
-| Research (CAD) | ✅ Completed | Industry Analysis |
-| Coder | ⏸️ Paused | Waiting for C++ SDK setup |
-| Docs | ✅ Active | Doc Updates |
-
----
-
-## Communication
-
-- **Subagents → Coordinator:** Via final message in session
-- **Coordinator → User:** Via chat response
-- **File-based handoff:** Docs in `research/`, `docs/`
-
----
-
-*Erstellt: 2026-02-05*
+*Siehe `progress.txt` für aktuelle Tasks.*
