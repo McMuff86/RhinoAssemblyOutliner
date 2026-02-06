@@ -84,15 +84,20 @@
 - ❌ Selection Highlight fehlt
 - ❌ Display Cache Integration fehlt
 
-## Phase 9: C++ SDK Implementation 🔧 (NÄCHSTER SCHRITT)
+## Phase 9: C++ SDK Implementation 🔧
 # Siehe docs/CPP_ROADMAP.md
-[ ] Rhino 8 C++ SDK Setup
-[ ] Hello World C++ Plugin
-[ ] CRhinoDisplayConduit Research
-[ ] Block-Rendering Analysis
-[ ] C++ Core: Visibility Conduit
-[ ] C#/C++ Integration (P/Invoke)
-[ ] UI Integration im Outliner
+[x] Rhino 8 C++ SDK Setup
+[x] Hello World C++ Plugin (MFC DLL, .def Exports)
+[x] CRhinoDisplayConduit Research (CPP_SDK_RESEARCH.md)
+[x] Block-Rendering Analysis
+[x] Native DLL Scaffold (NativeApi.h/cpp, P/Invoke Exports)
+[x] C++ Core: VisibilityData (thread-safe state mit CRITICAL_SECTION)
+[x] C++ Core: VisibilityConduit (SC_DRAWOBJECT, m_bDrawObject=false, dp.DrawObject)
+[x] NativeApi wired to real implementation (Init/Cleanup/Set/Get/Reset)
+[x] Build verifiziert (MSBuild Release x64, 7 Exports via dumpbin bestätigt)
+[~] C#/C++ Integration (P/Invoke) - DLL bereit, C# Aufrufe noch ausstehend
+[ ] UI Integration im Outliner (Eye-Icon → SetComponentVisibility aufrufen)
+[ ] Real-World Testing in Rhino (Ghost Artifacts? Selection? Performance?)
 
 ## Phase 10: CAD Research & Synthesis 🔬
 [x] SolidWorks FeatureManager Deep-Dive (Research Agent 1)
@@ -117,3 +122,6 @@
 - 2026-02-05 11:20: Per-Instance Visibility PoC implementiert (DisplayConduit Ansatz)
 - 2026-02-05 22:00: CAD Research abgeschlossen (2 parallele Research Agents)
 - 2026-02-05 22:10: Synthesis & Doc Updates (Coordinator)
+- 2026-02-05: Native DLL Scaffold erstellt (P/Invoke Stubs)
+- 2026-02-06: C++ VisibilityConduit implementiert (VisibilityData.h, VisibilityConduit.h/cpp, NativeApi wired)
+- 2026-02-06: Build erfolgreich, API-Fix: dp.DrawObject statt type-specific Draw calls
