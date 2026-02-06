@@ -3,19 +3,24 @@ using System.Collections.Generic;
 using Rhino;
 using Rhino.DocObjects;
 using RhinoAssemblyOutliner.Model;
+using RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 
 namespace RhinoAssemblyOutliner.Services;
 
 /// <summary>
 /// Service for managing visibility of block instances in the viewport.
+/// Top-level instances use standard Rhino show/hide.
+/// Nested components use native C++ per-instance visibility conduit with path-based addressing.
 /// </summary>
 public class VisibilityService
 {
     private readonly RhinoDoc _doc;
+    private bool _nativeInitialized;
 
     public VisibilityService(RhinoDoc doc)
     {
         _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        InitializeNative();
     }
 
     /// <summary>
@@ -26,22 +31,32 @@ public class VisibilityService
     /// <returns>The new visibility state.</returns>
     public bool ToggleVisibility(AssemblyNode node, bool includeChildren = false)
     {
-        if (node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
+        if (node is BlockInstanceNode blockNode)
         {
-            var obj = _doc.Objects.FindId(blockNode.InstanceId);
-            if (obj != null)
+            // Component inside a block → use native per-instance visibility
+            if (IsComponentNode(blockNode))
             {
-                bool newState = !IsVisible(obj);
-                SetVisibility(obj, newState);
-                node.IsVisible = newState;
+                return ToggleComponentVisibility(blockNode);
+            }
 
-                if (includeChildren)
+            // Top-level instance → use standard Rhino show/hide
+            if (blockNode.InstanceId != Guid.Empty)
+            {
+                var obj = _doc.Objects.FindId(blockNode.InstanceId);
+                if (obj != null)
                 {
-                    SetChildrenVisibility(node, newState);
-                }
+                    bool newState = !IsVisible(obj);
+                    SetVisibility(obj, newState);
+                    node.IsVisible = newState;
 
-                _doc.Views.Redraw();
-                return newState;
+                    if (includeChildren)
+                    {
+                        SetChildrenVisibility(node, newState);
+                    }
+
+                    _doc.Views.Redraw();
+                    return newState;
+                }
             }
         }
         return node.IsVisible;
@@ -52,13 +67,20 @@ public class VisibilityService
     /// </summary>
     public void SetVisibility(AssemblyNode node, bool visible, bool includeChildren = false)
     {
-        if (node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
+        if (node is BlockInstanceNode blockNode)
         {
-            var obj = _doc.Objects.FindId(blockNode.InstanceId);
-            if (obj != null)
+            if (IsComponentNode(blockNode))
             {
-                SetVisibility(obj, visible);
-                node.IsVisible = visible;
+                SetComponentVisibility(blockNode, visible);
+            }
+            else if (blockNode.InstanceId != Guid.Empty)
+            {
+                var obj = _doc.Objects.FindId(blockNode.InstanceId);
+                if (obj != null)
+                {
+                    SetVisibility(obj, visible);
+                    node.IsVisible = visible;
+                }
             }
         }
 
@@ -86,7 +108,7 @@ public class VisibilityService
     }
 
     /// <summary>
-    /// Shows all hidden objects.
+    /// Shows all hidden objects and resets native conduit state.
     /// </summary>
     public void ShowAll()
     {
@@ -95,6 +117,16 @@ public class VisibilityService
             if (!IsVisible(obj))
             {
                 SetVisibility(obj, true);
+            }
+
+            // Also reset any per-instance component visibility
+            if (_nativeInitialized)
+            {
+                var id = obj.Id;
+                if (NativeVisibilityInterop.GetHiddenComponentCount(ref id) > 0)
+                {
+                    NativeVisibilityInterop.ResetComponentVisibility(ref id);
+                }
             }
         }
         _doc.Views.Redraw();
@@ -117,6 +149,96 @@ public class VisibilityService
         SetVisibility(node, true, includeChildren);
         _doc.Views.Redraw();
     }
+
+    #region Native Per-Instance Visibility
+
+    private void InitializeNative()
+    {
+        if (_nativeInitialized) return;
+
+        if (!NativeVisibilityInterop.IsNativeDllAvailable())
+        {
+            RhinoApp.WriteLine("AssemblyOutliner: Native DLL not found — per-instance component visibility disabled.");
+            return;
+        }
+
+        if (NativeVisibilityInterop.NativeInit())
+        {
+            _nativeInitialized = true;
+            RhinoApp.WriteLine($"AssemblyOutliner: Native visibility module v{NativeVisibilityInterop.GetNativeVersion()} loaded.");
+        }
+        else
+        {
+            RhinoApp.WriteLine("AssemblyOutliner: NativeInit() failed.");
+        }
+    }
+
+    /// <summary>
+    /// Check if a node is a component inside a block (has ComponentIndex and a parent instance).
+    /// </summary>
+    private bool IsComponentNode(BlockInstanceNode node)
+    {
+        return node.ComponentIndex >= 0 && node.Parent is BlockInstanceNode;
+    }
+
+    /// <summary>
+    /// Resolves the path from a component node up to the top-level document instance.
+    /// Returns (topLevelGuid, componentPath) where componentPath is e.g. "1.0.2".
+    /// Walks up the tree collecting ComponentIndex values, then reverses to build the path.
+    /// </summary>
+    private (Guid topLevelId, string componentPath) ResolveComponentPath(BlockInstanceNode node)
+    {
+        var indices = new List<int>();
+        var current = node;
+
+        // Walk up collecting ComponentIndex values until we reach a top-level node
+        while (current != null && current.ComponentIndex >= 0)
+        {
+            indices.Add(current.ComponentIndex);
+            current = current.Parent as BlockInstanceNode;
+        }
+
+        // current is now the top-level document instance (ComponentIndex == -1)
+        if (current == null || current.InstanceId == Guid.Empty)
+            return (Guid.Empty, string.Empty);
+
+        // Reverse: we collected bottom-up, path is top-down
+        indices.Reverse();
+        string path = string.Join(".", indices);
+
+        return (current.InstanceId, path);
+    }
+
+    private bool ToggleComponentVisibility(BlockInstanceNode blockNode)
+    {
+        if (!_nativeInitialized) return blockNode.IsVisible;
+
+        var (topLevelId, componentPath) = ResolveComponentPath(blockNode);
+        if (topLevelId == Guid.Empty || string.IsNullOrEmpty(componentPath))
+            return blockNode.IsVisible;
+
+        bool currentlyVisible = NativeVisibilityInterop.IsComponentVisible(ref topLevelId, componentPath);
+        bool newVisible = !currentlyVisible;
+        NativeVisibilityInterop.SetComponentVisibility(ref topLevelId, componentPath, newVisible);
+        blockNode.IsVisible = newVisible;
+
+        _doc.Views.Redraw();
+        return newVisible;
+    }
+
+    private void SetComponentVisibility(BlockInstanceNode blockNode, bool visible)
+    {
+        if (!_nativeInitialized) return;
+
+        var (topLevelId, componentPath) = ResolveComponentPath(blockNode);
+        if (topLevelId == Guid.Empty || string.IsNullOrEmpty(componentPath))
+            return;
+
+        NativeVisibilityInterop.SetComponentVisibility(ref topLevelId, componentPath, visible);
+        blockNode.IsVisible = visible;
+    }
+
+    #endregion
 
     #region Private Helpers
 
@@ -141,13 +263,20 @@ public class VisibilityService
     {
         foreach (var child in node.Children)
         {
-            if (child is BlockInstanceNode blockChild && blockChild.InstanceId != Guid.Empty)
+            if (child is BlockInstanceNode blockChild)
             {
-                var obj = _doc.Objects.FindId(blockChild.InstanceId);
-                if (obj != null)
+                if (IsComponentNode(blockChild))
                 {
-                    SetVisibility(obj, visible);
-                    child.IsVisible = visible;
+                    SetComponentVisibility(blockChild, visible);
+                }
+                else if (blockChild.InstanceId != Guid.Empty)
+                {
+                    var obj = _doc.Objects.FindId(blockChild.InstanceId);
+                    if (obj != null)
+                    {
+                        SetVisibility(obj, visible);
+                        child.IsVisible = visible;
+                    }
                 }
             }
             SetChildrenVisibility(child, visible);

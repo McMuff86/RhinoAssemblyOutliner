@@ -3,9 +3,13 @@
 // Core logic: in SC_DRAWOBJECT, suppress managed instances via
 // m_bDrawObject = false, then manually draw only visible components
 // using dp.DrawObject() which uses Rhino's own rendering path.
+//
+// Path-based filtering allows hiding components at any nesting depth.
+// E.g. hiding path "1.0" hides the first child of the second component.
 
 #include "stdafx.h"
 #include "VisibilityConduit.h"
+#include <cstdio>
 
 CVisibilityConduit::CVisibilityConduit(CVisibilityData& visData)
 	: CRhinoDisplayConduit(CSupportChannels::SC_DRAWOBJECT)
@@ -37,6 +41,15 @@ bool CVisibilityConduit::ExecConduit(
 	if (!m_visData.IsManaged(instanceId))
 		return true;
 
+	if (m_debugLogging)
+	{
+		char buf[64];
+		ON_UuidToString(instanceId, buf);
+		ON_wString msg;
+		msg.Format(L"[Conduit] SC_DRAWOBJECT: instance %S, managed=YES, suppressing default draw\n", buf);
+		RhinoApp().Print(msg);
+	}
+
 	// --- This instance has hidden components: take over drawing ---
 
 	// Suppress the default drawing of this object
@@ -50,12 +63,23 @@ bool CVisibilityConduit::ExecConduit(
 
 	ON_Xform instanceXform = pInstance->InstanceXform();
 
-	// Iterate definition components, skip hidden ones
+	// Iterate definition components, skip hidden ones using path-based lookup
 	int componentCount = pDef->ObjectCount();
 	for (int i = 0; i < componentCount; i++)
 	{
-		if (m_visData.IsComponentHidden(instanceId, i))
+		std::string path = std::to_string(i);
+
+		// Check if this exact path is hidden
+		if (m_visData.IsComponentHidden(instanceId, path.c_str()))
+		{
+			if (m_debugLogging)
+			{
+				ON_wString msg;
+				msg.Format(L"[Conduit]   component[%d] path=\"%S\" => HIDDEN, skipping\n", i, path.c_str());
+				RhinoApp().Print(msg);
+			}
 			continue;
+		}
 
 		const CRhinoObject* pComponent = pDef->Object(i);
 		if (!pComponent)
@@ -67,13 +91,41 @@ bool CVisibilityConduit::ExecConduit(
 
 		if (pComponent->ObjectType() == ON::instance_reference)
 		{
-			// Nested block instance — recurse
+			// Nested block instance — check if it has hidden descendants
 			const CRhinoInstanceObject* pNestedInstance =
 				static_cast<const CRhinoInstanceObject*>(pComponent);
-			DrawNestedInstance(dp, pNestedInstance, instanceXform, 0);
+
+			if (m_visData.HasHiddenDescendants(instanceId, path.c_str()))
+			{
+				// This sub-block has hidden children, recurse with filtering
+				if (m_debugLogging)
+				{
+					ON_wString msg;
+					msg.Format(L"[Conduit]   component[%d] path=\"%S\" => nested block with hidden descendants, recursing\n", i, path.c_str());
+					RhinoApp().Print(msg);
+				}
+				DrawNestedFiltered(dp, pNestedInstance, instanceXform, instanceId, path, 0);
+			}
+			else
+			{
+				// No hidden descendants — draw entire sub-block normally
+				if (m_debugLogging)
+				{
+					ON_wString msg;
+					msg.Format(L"[Conduit]   component[%d] path=\"%S\" => nested block, no hidden descendants, DrawObject\n", i, path.c_str());
+					RhinoApp().Print(msg);
+				}
+				DrawComponent(dp, pComponent, instanceXform);
+			}
 		}
 		else
 		{
+			if (m_debugLogging)
+			{
+				ON_wString msg;
+				msg.Format(L"[Conduit]   component[%d] path=\"%S\" type=%d => DrawObject\n", i, path.c_str(), pComponent->ObjectType());
+				RhinoApp().Print(msg);
+			}
 			DrawComponent(dp, pComponent, instanceXform);
 		}
 	}
@@ -97,10 +149,12 @@ void CVisibilityConduit::DrawComponent(
 	dp.DrawObject(pComponent, &xform);
 }
 
-void CVisibilityConduit::DrawNestedInstance(
+void CVisibilityConduit::DrawNestedFiltered(
 	CRhinoDisplayPipeline& dp,
 	const CRhinoInstanceObject* pNestedInstance,
 	const ON_Xform& parentXform,
+	const ON_UUID& topLevelId,
+	const std::string& parentPath,
 	int depth)
 {
 	if (!pNestedInstance || depth >= MAX_NESTING_DEPTH)
@@ -116,6 +170,20 @@ void CVisibilityConduit::DrawNestedInstance(
 	int componentCount = pDef->ObjectCount();
 	for (int i = 0; i < componentCount; i++)
 	{
+		std::string childPath = BuildPath(parentPath, i);
+
+		// Check if this exact path is hidden
+		if (m_visData.IsComponentHidden(topLevelId, childPath.c_str()))
+		{
+			if (m_debugLogging)
+			{
+				ON_wString msg;
+				msg.Format(L"[Conduit]   nested path=\"%S\" => HIDDEN, skipping\n", childPath.c_str());
+				RhinoApp().Print(msg);
+			}
+			continue;
+		}
+
 		const CRhinoObject* pComponent = pDef->Object(i);
 		if (!pComponent || !pComponent->IsVisible())
 			continue;
@@ -124,13 +192,30 @@ void CVisibilityConduit::DrawNestedInstance(
 		{
 			const CRhinoInstanceObject* pDeeper =
 				static_cast<const CRhinoInstanceObject*>(pComponent);
-			DrawNestedInstance(dp, pDeeper, combinedXform, depth + 1);
+
+			if (m_visData.HasHiddenDescendants(topLevelId, childPath.c_str()))
+			{
+				// Recurse deeper with filtering
+				DrawNestedFiltered(dp, pDeeper, combinedXform, topLevelId, childPath, depth + 1);
+			}
+			else
+			{
+				// No hidden descendants — draw entire sub-block normally
+				DrawComponent(dp, pComponent, combinedXform);
+			}
 		}
 		else
 		{
 			DrawComponent(dp, pComponent, combinedXform);
 		}
 	}
+}
+
+std::string CVisibilityConduit::BuildPath(const std::string& parentPath, int childIndex)
+{
+	if (parentPath.empty())
+		return std::to_string(childIndex);
+	return parentPath + "." + std::to_string(childIndex);
 }
 
 ON_Color CVisibilityConduit::GetComponentColor(

@@ -9,4 +9,5 @@ EXPORTS
     IsComponentVisible
     GetHiddenComponentCount
     ResetComponentVisibility
+    SetDebugLogging
     GetNativeVersion

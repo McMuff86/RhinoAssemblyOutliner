@@ -4,8 +4,8 @@
 #include "NativeApi.h"
 #include "VisibilityConduit.h"
 
-// Version: increment when API changes
-static const int NATIVE_API_VERSION = 1;
+// Version: increment when API changes (2 = path-based API)
+static const int NATIVE_API_VERSION = 2;
 
 static bool g_initialized = false;
 static CVisibilityData* g_pVisData = nullptr;
@@ -59,18 +59,18 @@ void __stdcall NativeCleanup()
 
 bool __stdcall SetComponentVisibility(
 	const ON_UUID* instanceId,
-	int componentIndex,
+	const char* componentPath,
 	bool visible)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId || !g_pVisData)
+	if (!g_initialized || !instanceId || !componentPath || !g_pVisData)
 		return false;
 
 	if (visible)
-		g_pVisData->SetComponentVisible(*instanceId, componentIndex);
+		g_pVisData->SetComponentVisible(*instanceId, componentPath);
 	else
-		g_pVisData->SetComponentHidden(*instanceId, componentIndex);
+		g_pVisData->SetComponentHidden(*instanceId, componentPath);
 
 	RedrawActiveDoc();
 	return true;
@@ -78,14 +78,14 @@ bool __stdcall SetComponentVisibility(
 
 bool __stdcall IsComponentVisible(
 	const ON_UUID* instanceId,
-	int componentIndex)
+	const char* componentPath)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId || !g_pVisData)
+	if (!g_initialized || !instanceId || !componentPath || !g_pVisData)
 		return true;
 
-	return !g_pVisData->IsComponentHidden(*instanceId, componentIndex);
+	return !g_pVisData->IsComponentHidden(*instanceId, componentPath);
 }
 
 int __stdcall GetHiddenComponentCount(const ON_UUID* instanceId)
@@ -107,6 +107,14 @@ void __stdcall ResetComponentVisibility(const ON_UUID* instanceId)
 
 	g_pVisData->ResetInstance(*instanceId);
 	RedrawActiveDoc();
+}
+
+void __stdcall SetDebugLogging(bool enabled)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (g_pConduit)
+		g_pConduit->SetDebugLogging(enabled);
 }
 
 int __stdcall GetNativeVersion()

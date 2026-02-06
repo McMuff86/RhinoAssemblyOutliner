@@ -227,14 +227,15 @@ public class AssemblyTreeBuilder
     private void ProcessDefinitionContents(BlockInstanceNode parentNode, InstanceDefinition definition, int depth = 0)
     {
         if (definition == null) return;
-        
+
         var objects = definition.GetObjects();
         if (objects == null || objects.Length == 0) return;
 
-        foreach (var obj in objects)
+        for (int i = 0; i < objects.Length; i++)
         {
+            var obj = objects[i];
             if (obj == null || obj.IsDeleted) continue;
-            
+
             try
             {
                 if (obj is InstanceObject nestedInstance)
@@ -242,6 +243,7 @@ public class AssemblyTreeBuilder
                     var childNode = CreateBlockInstanceNode(nestedInstance, depth);
                     if (childNode != null)
                     {
+                        childNode.ComponentIndex = i;
                         parentNode.AddChild(childNode);
                     }
                 }

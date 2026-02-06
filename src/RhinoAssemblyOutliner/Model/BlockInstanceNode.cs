@@ -32,6 +32,13 @@ public class BlockInstanceNode : AssemblyNode
     public int InstanceNumber { get; set; }
 
     /// <summary>
+    /// Index of this object within its parent block definition's object array.
+    /// -1 for top-level instances (not inside any block).
+    /// Used for per-instance component visibility via native DLL.
+    /// </summary>
+    public int ComponentIndex { get; set; } = -1;
+
+    /// <summary>
     /// Total count of instances of this definition in the document.
     /// </summary>
     public int TotalInstanceCount { get; set; }
