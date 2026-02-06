@@ -2,11 +2,22 @@
 
 #include "stdafx.h"
 #include "NativeApi.h"
+#include "VisibilityConduit.h"
 
 // Version: increment when API changes
 static const int NATIVE_API_VERSION = 1;
 
 static bool g_initialized = false;
+static CVisibilityData* g_pVisData = nullptr;
+static CVisibilityConduit* g_pConduit = nullptr;
+
+/// Helper: trigger a document redraw after visibility changes
+static void RedrawActiveDoc()
+{
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
+	if (pDoc)
+		pDoc->Redraw();
+}
 
 bool __stdcall NativeInit()
 {
@@ -15,7 +26,10 @@ bool __stdcall NativeInit()
 	if (g_initialized)
 		return true;
 
-	// TODO: Create and enable CRhinoDisplayConduit here
+	g_pVisData = new CVisibilityData();
+	g_pConduit = new CVisibilityConduit(*g_pVisData);
+	g_pConduit->Enable(RhinoApp().ActiveDoc()->RuntimeSerialNumber());
+
 	g_initialized = true;
 	return true;
 }
@@ -27,7 +41,19 @@ void __stdcall NativeCleanup()
 	if (!g_initialized)
 		return;
 
-	// TODO: Disable and destroy CRhinoDisplayConduit here
+	if (g_pConduit)
+	{
+		g_pConduit->Disable();
+		delete g_pConduit;
+		g_pConduit = nullptr;
+	}
+
+	if (g_pVisData)
+	{
+		delete g_pVisData;
+		g_pVisData = nullptr;
+	}
+
 	g_initialized = false;
 }
 
@@ -38,11 +64,16 @@ bool __stdcall SetComponentVisibility(
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId)
+	if (!g_initialized || !instanceId || !g_pVisData)
 		return false;
 
-	// TODO: Implement with CRhinoDisplayConduit + visibility data
-	return false;
+	if (visible)
+		g_pVisData->SetComponentVisible(*instanceId, componentIndex);
+	else
+		g_pVisData->SetComponentHidden(*instanceId, componentIndex);
+
+	RedrawActiveDoc();
+	return true;
 }
 
 bool __stdcall IsComponentVisible(
@@ -51,32 +82,31 @@ bool __stdcall IsComponentVisible(
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId)
+	if (!g_initialized || !instanceId || !g_pVisData)
 		return true;
 
-	// TODO: Query visibility data
-	return true;
+	return !g_pVisData->IsComponentHidden(*instanceId, componentIndex);
 }
 
 int __stdcall GetHiddenComponentCount(const ON_UUID* instanceId)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId)
+	if (!g_initialized || !instanceId || !g_pVisData)
 		return 0;
 
-	// TODO: Query visibility data
-	return 0;
+	return g_pVisData->GetHiddenCount(*instanceId);
 }
 
 void __stdcall ResetComponentVisibility(const ON_UUID* instanceId)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!g_initialized || !instanceId)
+	if (!g_initialized || !instanceId || !g_pVisData)
 		return;
 
-	// TODO: Clear visibility data and redraw
+	g_pVisData->ResetInstance(*instanceId);
+	RedrawActiveDoc();
 }
 
 int __stdcall GetNativeVersion()
