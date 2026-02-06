@@ -1,7 +1,8 @@
 // VisibilityConduit.cpp : CRhinoDisplayConduit implementation
 //
 // Core logic: in SC_DRAWOBJECT, suppress managed instances via
-// m_bDrawObject = false, then manually draw only visible components.
+// m_bDrawObject = false, then manually draw only visible components
+// using dp.DrawObject() which uses Rhino's own rendering path.
 
 #include "stdafx.h"
 #include "VisibilityConduit.h"
@@ -90,80 +91,10 @@ void CVisibilityConduit::DrawComponent(
 	if (!pComponent)
 		return;
 
-	// Try dp.DrawObject first — this is the simplest and most complete approach.
-	// It uses Rhino's own rendering path, handles all geometry types, materials,
-	// display modes, and caching.
-	//
-	// Note: DrawObject with a CRhinoObject* draws the object at its current location.
-	// We need to transform it, so we use the overload that takes a transform.
-
-	switch (pComponent->ObjectType())
-	{
-	case ON::brep_object:
-	{
-		const CRhinoBrepObject* pBrep =
-			static_cast<const CRhinoBrepObject*>(pComponent);
-		const ON_Brep* pBrepGeom = pBrep->Brep();
-		if (pBrepGeom)
-		{
-			ON_Color color = GetComponentColor(pComponent, dp.GetRhinoDoc());
-			dp.DrawBrep(*pBrepGeom, color, 1, false, nullptr, &xform);
-		}
-		break;
-	}
-
-	case ON::mesh_object:
-	{
-		const CRhinoMeshObject* pMeshObj =
-			static_cast<const CRhinoMeshObject*>(pComponent);
-		const ON_Mesh* pMesh = pMeshObj->Mesh();
-		if (pMesh)
-		{
-			ON_Color color = GetComponentColor(pComponent, dp.GetRhinoDoc());
-			dp.DrawMesh(*pMesh, true, true, nullptr, &xform);
-		}
-		break;
-	}
-
-	case ON::curve_object:
-	{
-		const CRhinoCurveObject* pCurveObj =
-			static_cast<const CRhinoCurveObject*>(pComponent);
-		const ON_Curve* pCurve = pCurveObj->Curve();
-		if (pCurve)
-		{
-			ON_Color color = GetComponentColor(pComponent, dp.GetRhinoDoc());
-			dp.DrawCurve(*pCurve, color, 1, nullptr, &xform);
-		}
-		break;
-	}
-
-	case ON::extrusion_object:
-	{
-		const CRhinoExtrusionObject* pExtObj =
-			static_cast<const CRhinoExtrusionObject*>(pComponent);
-		const ON_Extrusion* pExtrusion = pExtObj->Extrusion();
-		if (pExtrusion)
-		{
-			ON_Color color = GetComponentColor(pComponent, dp.GetRhinoDoc());
-			dp.DrawExtrusion(*pExtrusion, color, 1, false, nullptr, &xform);
-		}
-		break;
-	}
-
-	case ON::point_object:
-	{
-		ON_3dPoint pt = pComponent->BoundingBox().Center();
-		pt.Transform(xform);
-		ON_Color color = GetComponentColor(pComponent, dp.GetRhinoDoc());
-		dp.DrawPoint(pt, color);
-		break;
-	}
-
-	default:
-		// For other types, try to get the render mesh or wireframe
-		break;
-	}
+	// Use dp.DrawObject with transform — this is the simplest and most
+	// complete approach. It uses Rhino's own rendering path, handles all
+	// geometry types, materials, display modes, and caching automatically.
+	dp.DrawObject(pComponent, &xform);
 }
 
 void CVisibilityConduit::DrawNestedInstance(
