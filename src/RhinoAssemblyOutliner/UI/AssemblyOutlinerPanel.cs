@@ -633,9 +633,11 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         var allNodes = root.GetAllDescendants().OfType<BlockInstanceNode>().ToList();
         int total = allNodes.Count;
         int hidden = allNodes.Count(n => !n.IsVisible);
-        // Count isolated: if any are visible and some hidden, we're in isolate-like state
-        // Simple approach: show hidden count
-        var parts = new List<string> { $"{total} instances" };
+        int definitions = allNodes.Select(n => n.BlockDefinitionIndex).Distinct().Count();
+
+        var parts = new List<string>();
+        parts.Add($"{definitions} definitions");
+        parts.Add($"{total} instances");
         if (hidden > 0) parts.Add($"{hidden} hidden");
         if (_isIsolated) parts.Add($"🔍 ISOLATED: {_isolatedNodeName}");
         _statusBar.Text = string.Join(" | ", parts);
