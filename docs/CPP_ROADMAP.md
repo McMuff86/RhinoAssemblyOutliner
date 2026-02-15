@@ -63,65 +63,33 @@ Der C# DisplayConduit-Ansatz hat fundamentale Limitationen bewiesen (siehe [PER_
 
 ---
 
-## Phase 2: C++ Core Implementation
+## Phase 2: C++ Core Implementation ✅ DONE
 
-### 2.1 Visibility Data Management
-```cpp
-// Konzept: Custom User Data für Instances
-class CComponentVisibilityData : public ON_UserData
-{
-public:
-    ON_SimpleArray<int> m_hidden_components;
-    
-    // Serialization
-    bool Write(ON_BinaryArchive&) const override;
-    bool Read(ON_BinaryArchive&) override;
-};
-```
+All core C++ components implemented as of 2026-02-15:
 
-### 2.2 Custom Display Conduit
-```cpp
-class CPerInstanceVisibilityConduit : public CRhinoDisplayConduit
-{
-public:
-    CPerInstanceVisibilityConduit();
-    
-    // Override drawing
-    bool ExecConduit(
-        CRhinoDisplayPipeline& dp,
-        UINT nActiveChannel,
-        bool& bTerminate
-    ) override;
+### 2.1 Visibility Data Management ✅
+- `CVisibilityData` — thread-safe state store with `CRITICAL_SECTION` + RAII `CAutoLock`
+- `ComponentState` enum: `CS_VISIBLE(0)`, `CS_HIDDEN(1)`, `CS_SUPPRESSED(2)`, `CS_TRANSPARENT(3)`
+- Path-based addressing (dot-separated indices: `"0"`, `"1.0"`, `"1.0.2"`)
+- `CVisibilitySnapshot` — lock-free per-frame snapshot pattern for zero contention during render
+- `HasHiddenDescendants` optimization — precomputed parent prefix set for O(1) lookups
+- Custom `ON_UUID_Hash` / `ON_UUID_Equal` for `std::unordered_map` keys
 
-private:
-    void DrawInstanceWithHiddenComponents(
-        CRhinoDisplayPipeline& dp,
-        const CRhinoInstanceObject& instance,
-        const CComponentVisibilityData& visData
-    );
-};
-```
+### 2.2 Custom Display Conduit ✅
+- `CVisibilityConduit` — 4-channel conduit:
+  - **SC_PREDRAWOBJECTS** — takes snapshot once per frame
+  - **SC_DRAWOBJECT** — suppresses managed instances, redraws visible components with path filtering
+  - **SC_POSTDRAWOBJECTS** — selection highlights via `DrawObject` (no per-frame heap allocs)
+  - **SC_CALCBOUNDINGBOX** — correct ZoomExtents using only visible components (suppressed excluded)
+- Recursive nested block handling (`DrawNestedFiltered`) with max depth 32
+- `CS_TRANSPARENT` rendering with alpha overlay (~30% opacity)
+- Component color resolution (object/layer/parent color sources)
 
-### 2.3 API für C# Integration
-```cpp
-// Exported functions für P/Invoke
-extern "C" {
-    __declspec(dllexport) bool SetComponentVisibility(
-        ON_UUID instanceId, 
-        int componentIndex, 
-        bool visible
-    );
-    
-    __declspec(dllexport) bool IsComponentVisible(
-        ON_UUID instanceId,
-        int componentIndex
-    );
-    
-    __declspec(dllexport) int GetHiddenComponentCount(
-        ON_UUID instanceId
-    );
-}
-```
+### 2.3 API für C# Integration ✅
+- 14 exported `extern "C" __stdcall` functions (see `API_REFERENCE.md`)
+- API version 4 (ComponentState enum + conduit improvements)
+- `CComponentVisibilityData` (ON_UserData) for .3dm persistence
+- `CDocEventHandler` for auto-sync on open/save/close/delete
 
 ---
 
@@ -193,13 +161,25 @@ public static class PerInstanceVisibilityNative
 
 ---
 
-## Nächste Aktion
+## What's Next
 
-1. **Rhino C++ SDK herunterladen und installieren**
-2. **Hello World C++ Plugin erstellen**
-3. **CRhinoDisplayConduit Beispiel aus SDK Samples testen**
-4. **Experiment: Block-Rendering intercepten**
+### CRhinoCacheHandle Integration
+- Cache display lists per managed instance to avoid reprocessing geometry every frame
+- Key performance optimization for 100+ managed instances
+
+### SRWLOCK Migration
+- Replace `CRITICAL_SECTION` with `SRWLOCK` for reader/writer separation
+- Multiple render threads can snapshot concurrently; only state mutations take exclusive lock
+
+### Display States
+- Rich display modes per ComponentState (e.g., wireframe-only for transparent, custom materials)
+- Integration with Rhino display modes (shaded, rendered, etc.)
+
+### Validation Testing
+- Runtime testing in Rhino 8 with real assemblies (pending Windows build)
+- Performance profiling with 100+ managed instances
 
 ---
 
-*Erstellt: 2026-02-05 nach C# PoC Erkenntnissen*
+*Erstellt: 2026-02-05 nach C# PoC Erkenntnissen*  
+*Updated: 2026-02-15 — Phase 2 complete, snapshot pattern, ComponentState enum, 4-channel conduit*

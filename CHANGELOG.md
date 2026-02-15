@@ -6,6 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2.0.0-alpha.2] — 2026-02-15
+
+### Added
+- **ComponentState enum** — 4-state model replacing boolean visibility: Visible(0), Hidden(1), Suppressed(2), Transparent(3)
+- **SetComponentState / GetComponentState** — new API functions for rich state control
+- **Snapshot pattern** — `CVisibilitySnapshot` taken once per frame at SC_PREDRAWOBJECTS, eliminates lock contention during rendering
+- **SC_CALCBOUNDINGBOX** channel — correct ZoomExtents with only visible components (suppressed excluded from bbox)
+- **SC_POSTDRAWOBJECTS** channel — selection highlights via `DrawObject` (no per-frame heap allocations, no manual edge extraction)
+- **SC_PREDRAWOBJECTS** channel — frame-start snapshot acquisition
+- **HasHiddenDescendants optimization** — precomputed parent prefix set for O(1) nested block recursion decisions
+- **Transparent rendering** — CS_TRANSPARENT draws components with ~30% alpha opacity
+
+### Changed
+- **Native API version** bumped to 4 (from 3)
+- **CVisibilityData** now stores `ComponentState` per path instead of simple hidden set
+- **CVisibilityConduit** expanded from 1 channel (SC_DRAWOBJECT) to 4 channels (PREDRAW/DRAWOBJECT/POSTDRAW/CALCBBOX)
+- **Thread model** — single lock per frame via snapshot instead of per-object per-channel locking
+
+---
+
 ## [1.0.0-rc1] — 2026-02-15
 
 ### Added

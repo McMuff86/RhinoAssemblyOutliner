@@ -67,9 +67,19 @@ Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance co
 **Early progress (done during Sprint 1/2 refactoring):**
 - ✅ 3.1: C++ SDK setup, VS project, build config (`build-native.ps1`), PlatformToolset v143
 - ✅ 3.5: `CComponentVisibilityData` ON_UserData with chunked Write/Read serialization
-- ✅ 3.6: P/Invoke bridge — all 12 extern C functions implemented, NativeApi.h/.cpp complete
+- ✅ 3.6: P/Invoke bridge — all 14 extern C functions implemented, NativeApi.h/.cpp complete
 - ✅ DocEventHandler: auto-sync on open/save/close/delete (not in original sprint plan)
 - ✅ VisibilityConduit: SC_DRAWOBJECT interception with path-based filtering + nested block recursion
+
+**Sprint 3 C++ improvements (2026-02-15):**
+- ✅ ComponentState enum — 4-state model (Visible/Hidden/Suppressed/Transparent) replacing boolean visibility
+- ✅ SetComponentState / GetComponentState API functions
+- ✅ Snapshot pattern — `CVisibilitySnapshot` for lock-free per-frame rendering
+- ✅ SC_CALCBOUNDINGBOX — correct ZoomExtents (suppressed components excluded)
+- ✅ SC_POSTDRAWOBJECTS — selection highlights via DrawObject (no heap allocs)
+- ✅ SC_PREDRAWOBJECTS — frame-start snapshot acquisition
+- ✅ HasHiddenDescendants optimization — O(1) prefix lookup via precomputed set
+- ✅ API version bumped to 4
 - ⏳ 3.2-3.4: Validation testing in Rhino (pending Windows build + runtime test)
 - ⏳ 3.7: End-to-end integration smoke test
 

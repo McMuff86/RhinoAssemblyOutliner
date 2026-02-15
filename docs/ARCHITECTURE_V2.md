@@ -272,6 +272,87 @@ NativeInterop.SetComponentVisibility() → catches DllNotFoundException
 
 ---
 
+## Snapshot Pattern
+
+The conduit uses a **snapshot pattern** to eliminate lock contention during rendering:
+
+```
+Frame Start
+    │
+    ▼
+SC_PREDRAWOBJECTS
+    ├── CVisibilityData::TakeSnapshot()  ← single lock acquisition
+    ├── Copies all state + precomputed prefixes into CVisibilitySnapshot
+    └── m_snapshotValid = true
+    │
+    ▼
+SC_CALCBOUNDINGBOX (uses snapshot — no locks)
+    │
+    ▼
+SC_DRAWOBJECT × N objects (uses snapshot — no locks)
+    │
+    ▼
+SC_POSTDRAWOBJECTS (uses snapshot — no locks)
+    └── m_snapshotValid = false  ← frame done
+```
+
+**Benefits:**
+- One lock per frame instead of one per object per channel
+- Render thread never blocks on UI thread mutations mid-frame
+- Consistent visibility state across all channels within a single frame
+
+The `CVisibilitySnapshot` provides the same query API as `CVisibilityData` (`IsManaged`, `GetComponentState`, `HasHiddenDescendants`) but without any synchronization.
+
+---
+
+## ComponentState Enum
+
+Replaces simple boolean visibility with a 4-state model:
+
+| Value | Name | Draw | BBox | BOM | Use Case |
+|-------|------|------|------|-----|----------|
+| 0 | `CS_VISIBLE` | ✅ | ✅ | ✅ | Default |
+| 1 | `CS_HIDDEN` | ❌ | ✅ | ✅ | Visual-only hide (still in ZoomExtents) |
+| 2 | `CS_SUPPRESSED` | ❌ | ❌ | ❌ | Structural exclusion (design exploration) |
+| 3 | `CS_TRANSPARENT` | ✅ α | ✅ | ✅ | Context visibility (~30% opacity) |
+
+State is stored in `CVisibilityData` as `unordered_map<string, ComponentState>` per instance. `CS_VISIBLE` entries are removed (default = visible).
+
+---
+
+## Conduit Channel Architecture
+
+The `CVisibilityConduit` subscribes to four display pipeline channels:
+
+### SC_PREDRAWOBJECTS
+- Takes a lock-free snapshot of all visibility data
+- Single `CRITICAL_SECTION` acquisition per frame
+- Snapshot used by all subsequent channels
+
+### SC_DRAWOBJECT
+- Fires once per object in the scene
+- For managed instances: suppresses default draw (`m_bDrawObject = false`)
+- Iterates definition objects, skips `CS_HIDDEN` and `CS_SUPPRESSED`
+- Draws `CS_TRANSPARENT` with alpha overlay
+- Nested blocks: uses `HasHiddenDescendants` (O(1) prefix lookup) to decide whether to recurse or draw entire sub-block
+
+### SC_POSTDRAWOBJECTS
+- Draws selection highlights for managed instances that are selected
+- Uses `dp.DrawObject()` — no manual edge extraction, no per-frame heap allocations
+- Invalidates snapshot (frame complete)
+
+### SC_CALCBOUNDINGBOX
+- Computes bounding box contributions for only visible components
+- `CS_SUPPRESSED` components excluded entirely (affects ZoomExtents)
+- `CS_HIDDEN` components still contribute to bbox
+- Recursive for nested blocks with `AccumulateNestedBBox`
+
+### HasHiddenDescendants Optimization
+
+For path `"1.0.2"`, the system precomputes parent prefixes `{"1.0.2", "1.0", "1"}` into a `std::unordered_set`. This allows O(1) checks when deciding whether to recurse into a nested block or draw it wholesale — critical for deeply nested assemblies.
+
+---
+
 ## Thread Safety
 
 - **C++ side:** `CRITICAL_SECTION` with RAII `CAutoLock` in `CVisibilityData` — protects all reads/writes from concurrent render thread and UI thread access

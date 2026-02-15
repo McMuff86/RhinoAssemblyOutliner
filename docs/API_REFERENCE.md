@@ -1,7 +1,7 @@
 # Native API Reference
 
 > C exports from `RhinoAssemblyOutliner.native.dll`  
-> API Version: **3** (persistence + extended API)  
+> API Version: **4** (ComponentState enum + conduit improvements)  
 > Calling convention: `__stdcall`  
 > Header: `NativeApi.h`
 
@@ -180,11 +180,64 @@ int __stdcall GetNativeVersion();
 
 Get the native API version number for compatibility checks.
 
-- **Returns:** `3` (current version)
+- **Returns:** `4` (current version)
 - **Version history:**
   - 1: Basic conduit + visibility
   - 2: Extended query API
   - 3: Persistence (UserData) + doc events
+  - 4: ComponentState enum + snapshot pattern + conduit improvements
+
+---
+
+## Component State
+
+### `SetComponentState`
+
+```cpp
+bool __stdcall SetComponentState(
+    const ON_UUID* instanceId,   // Rhino object GUID of the block instance
+    const char*    path,         // Dot-separated component index path
+    int            state         // ComponentState enum value
+);
+```
+
+Set the state of a specific component within a block instance. Replaces simple show/hide with a richer state model. Triggers an immediate viewport redraw.
+
+- **state values:**
+  - `0` = **Visible** — normal rendering (default)
+  - `1` = **Hidden** — visually hidden, still contributes to bounding box and BOM
+  - `2` = **Suppressed** — excluded from rendering, bounding box, BOM, and export
+  - `3` = **Transparent** — drawn with ~30% alpha transparency
+- **Returns:** `true` on success, `false` if not initialized, null params, or invalid state value
+- **Thread safety:** Acquires CRITICAL_SECTION internally
+- **C# marshalling:** `ref Guid instanceId`, `string path`, `int state`
+
+---
+
+### `GetComponentState`
+
+```cpp
+int __stdcall GetComponentState(
+    const ON_UUID* instanceId,
+    const char*    path
+);
+```
+
+Query the current state of a component within a block instance.
+
+- **Returns:** `ComponentState` enum value (0–3), defaults to `0` (Visible) if not found or not initialized
+- **C# marshalling:** `ref Guid instanceId`, `string path`
+
+---
+
+### ComponentState Enum
+
+| Value | Name | Rendering | BBox | BOM | Description |
+|-------|------|-----------|------|-----|-------------|
+| 0 | `CS_VISIBLE` | ✅ Normal | ✅ | ✅ | Default state |
+| 1 | `CS_HIDDEN` | ❌ Hidden | ✅ | ✅ | Visual-only hide |
+| 2 | `CS_SUPPRESSED` | ❌ Hidden | ❌ | ❌ | Structural exclusion |
+| 3 | `CS_TRANSPARENT` | ✅ Alpha | ✅ | ✅ | Semi-transparent (~30% opacity) |
 
 ---
 
