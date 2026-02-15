@@ -18,9 +18,10 @@ namespace RhinoAssemblyOutliner.UI;
 /// Displays a hierarchical tree view of block instances in the document.
 /// </summary>
 [System.Runtime.InteropServices.Guid("7E8F9A0B-1C2D-3E4F-5A6B-7C8D9E0F1A2B")]
-public class AssemblyOutlinerPanel : Panel, IPanel
+public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
 {
     private readonly uint _documentSerialNumber;
+    private bool _disposed;
     private AssemblyTreeView _treeView;
     private DetailPanel _detailPanel;
     private SearchBox _searchBox;
@@ -283,10 +284,27 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     public void PanelClosing(uint documentSerialNumber, bool onCloseDocument)
     {
+        Dispose();
+    }
+
+    /// <summary>
+    /// Disposes resources held by this panel.
+    /// </summary>
+    public new void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
         UnsubscribeEvents();
-        _refreshTimer?.Stop();
-        _refreshTimer?.Dispose();
-        _refreshTimer = null;
+
+        if (_refreshTimer != null)
+        {
+            _refreshTimer.Stop();
+            _refreshTimer.Dispose();
+            _refreshTimer = null;
+        }
+
+        base.Dispose();
     }
 
     #endregion
