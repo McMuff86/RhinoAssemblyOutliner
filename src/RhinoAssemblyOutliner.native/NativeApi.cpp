@@ -6,8 +6,8 @@
 #include "DocEventHandler.h"
 #include "VisibilityUserData.h"
 
-// Version: increment when API changes (3 = persistence + extended API)
-static const int NATIVE_API_VERSION = 3;
+// Version: increment when API changes (4 = ComponentState enum + conduit improvements)
+static const int NATIVE_API_VERSION = 4;
 
 static bool g_initialized = false;
 static CVisibilityData* g_pVisData = nullptr;
@@ -242,4 +242,34 @@ bool __stdcall IsConduitEnabled()
 		return false;
 
 	return g_pConduit->IsEnabled() ? true : false;
+}
+
+bool __stdcall SetComponentState(
+	const ON_UUID* instanceId,
+	const char* path,
+	int state)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_initialized || !instanceId || !path || !g_pVisData)
+		return false;
+
+	if (state < CS_VISIBLE || state > CS_TRANSPARENT)
+		return false;
+
+	g_pVisData->SetState(*instanceId, path, static_cast<ComponentState>(state));
+	RedrawActiveDoc();
+	return true;
+}
+
+int __stdcall GetComponentState(
+	const ON_UUID* instanceId,
+	const char* path)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_initialized || !instanceId || !path || !g_pVisData)
+		return CS_VISIBLE;
+
+	return static_cast<int>(g_pVisData->GetState(*instanceId, path));
 }

@@ -58,4 +58,19 @@ extern "C"
 
 	/// Check if native conduit is currently enabled
 	NATIVE_API bool __stdcall IsConduitEnabled();
+
+	/// Set the state of a component within a block instance.
+	/// state: 0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent
+	NATIVE_API bool __stdcall SetComponentState(
+		const ON_UUID* instanceId,
+		const char* path,
+		int state
+	);
+
+	/// Get the state of a component within a block instance.
+	/// Returns: 0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent
+	NATIVE_API int __stdcall GetComponentState(
+		const ON_UUID* instanceId,
+		const char* path
+	);
 }

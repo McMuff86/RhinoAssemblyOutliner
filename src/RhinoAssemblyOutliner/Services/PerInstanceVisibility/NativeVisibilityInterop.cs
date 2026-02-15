@@ -64,6 +64,30 @@ public static class NativeVisibilityInterop
     public static extern bool IsConduitEnabled();
 
     /// <summary>
+    /// Set the state of a component within a block instance.
+    /// </summary>
+    /// <param name="instanceId">The block instance UUID.</param>
+    /// <param name="path">Dot-separated component path (e.g. "0", "1.0.2").</param>
+    /// <param name="state">0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent.</param>
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetComponentState(
+        ref Guid instanceId,
+        [MarshalAs(UnmanagedType.LPStr)] string path,
+        int state
+    );
+
+    /// <summary>
+    /// Get the state of a component within a block instance.
+    /// </summary>
+    /// <returns>0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent.</returns>
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern int GetComponentState(
+        ref Guid instanceId,
+        [MarshalAs(UnmanagedType.LPStr)] string path
+    );
+
+    /// <summary>
     /// Check if the native DLL exists next to the plugin.
     /// </summary>
     public static bool IsNativeDllAvailable()

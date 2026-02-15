@@ -15,3 +15,5 @@ EXPORTS
     LoadVisibilityState
     GetManagedInstances
     IsConduitEnabled
+    SetComponentState
+    GetComponentState
