@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <vector>
 
 /// Hash functor for ON_UUID in std containers
 struct ON_UUID_Hash
@@ -147,6 +148,27 @@ public:
 	{
 		CAutoLock lock(m_cs);
 		m_data.clear();
+	}
+
+	/// Get all hidden paths for an instance (copies into output set)
+	void GetHiddenPaths(const ON_UUID& instanceId, std::unordered_set<std::string>& outPaths) const
+	{
+		CAutoLock lock(m_cs);
+		auto it = m_data.find(instanceId);
+		if (it != m_data.end())
+			outPaths = it->second;
+	}
+
+	/// Get all managed instance IDs
+	void GetManagedInstanceIds(std::vector<ON_UUID>& outIds) const
+	{
+		CAutoLock lock(m_cs);
+		outIds.reserve(m_data.size());
+		for (const auto& pair : m_data)
+		{
+			if (!pair.second.empty())
+				outIds.push_back(pair.first);
+		}
 	}
 
 private:

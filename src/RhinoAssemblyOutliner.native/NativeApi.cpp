@@ -3,13 +3,16 @@
 #include "stdafx.h"
 #include "NativeApi.h"
 #include "VisibilityConduit.h"
+#include "DocEventHandler.h"
+#include "VisibilityUserData.h"
 
-// Version: increment when API changes (2 = path-based API)
-static const int NATIVE_API_VERSION = 2;
+// Version: increment when API changes (3 = persistence + extended API)
+static const int NATIVE_API_VERSION = 3;
 
 static bool g_initialized = false;
 static CVisibilityData* g_pVisData = nullptr;
 static CVisibilityConduit* g_pConduit = nullptr;
+static CDocEventHandler* g_pDocEventHandler = nullptr;
 
 /// Helper: trigger a document redraw after visibility changes
 static void RedrawActiveDoc()
@@ -28,6 +31,7 @@ bool __stdcall NativeInit()
 
 	g_pVisData = new CVisibilityData();
 	g_pConduit = new CVisibilityConduit(*g_pVisData);
+	g_pDocEventHandler = new CDocEventHandler(*g_pVisData);
 	g_pConduit->Enable(RhinoApp().ActiveDoc()->RuntimeSerialNumber());
 
 	g_initialized = true;
@@ -40,6 +44,13 @@ void __stdcall NativeCleanup()
 
 	if (!g_initialized)
 		return;
+
+	if (g_pDocEventHandler)
+	{
+		g_pDocEventHandler->Enable(FALSE);
+		delete g_pDocEventHandler;
+		g_pDocEventHandler = nullptr;
+	}
 
 	if (g_pConduit)
 	{
@@ -120,4 +131,116 @@ void __stdcall SetDebugLogging(bool enabled)
 int __stdcall GetNativeVersion()
 {
 	return NATIVE_API_VERSION;
+}
+
+void __stdcall PersistVisibilityState()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_initialized || !g_pVisData)
+		return;
+
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
+	if (!pDoc)
+		return;
+
+	std::vector<ON_UUID> managedIds;
+	g_pVisData->GetManagedInstanceIds(managedIds);
+
+	for (const auto& instanceId : managedIds)
+	{
+		const CRhinoObject* pObject = pDoc->LookupObjectByUuid(instanceId);
+		if (!pObject || pObject->ObjectType() != ON::instance_reference)
+			continue;
+
+		ON_Geometry* pGeomCopy = pObject->Geometry()->Duplicate();
+		if (!pGeomCopy)
+			continue;
+
+		CComponentVisibilityData* pExisting = CComponentVisibilityData::Cast(
+			pGeomCopy->GetUserData(VisibilityUserDataId));
+		if (pExisting)
+		{
+			pGeomCopy->DetachUserData(pExisting);
+			delete pExisting;
+		}
+
+		CComponentVisibilityData* pUD = new CComponentVisibilityData();
+		pUD->SyncFromVisData(instanceId, *g_pVisData);
+
+		if (!pUD->HiddenPaths.empty())
+		{
+			if (!pGeomCopy->AttachUserData(pUD))
+				delete pUD;
+		}
+		else
+		{
+			delete pUD;
+		}
+
+		pDoc->ReplaceObject(CRhinoObjRef(pObject), *pGeomCopy);
+		delete pGeomCopy;
+	}
+}
+
+void __stdcall LoadVisibilityState()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_initialized || !g_pVisData)
+		return;
+
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
+	if (!pDoc)
+		return;
+
+	CRhinoObjectIterator it(*pDoc, CRhinoObjectIterator::normal_objects);
+	it.SetObjectFilter(ON::instance_reference);
+
+	const CRhinoObject* pObject = nullptr;
+	while ((pObject = it.Next()) != nullptr)
+	{
+		if (pObject->ObjectType() != ON::instance_reference)
+			continue;
+
+		const ON_UUID instanceId = pObject->Attributes().m_uuid;
+		CComponentVisibilityData* pUD = CComponentVisibilityData::Cast(
+			pObject->Geometry()->GetUserData(VisibilityUserDataId));
+
+		if (pUD && !pUD->HiddenPaths.empty())
+		{
+			pUD->SyncToVisData(instanceId, *g_pVisData);
+		}
+	}
+}
+
+int __stdcall GetManagedInstances(ON_UUID* buffer, int maxCount)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_initialized || !g_pVisData)
+		return 0;
+
+	std::vector<ON_UUID> ids;
+	g_pVisData->GetManagedInstanceIds(ids);
+
+	int count = static_cast<int>(ids.size());
+	if (buffer && maxCount > 0)
+	{
+		int toCopy = (count < maxCount) ? count : maxCount;
+		for (int i = 0; i < toCopy; i++)
+			buffer[i] = ids[i];
+	}
+
+	return count;
+}
+
+bool __stdcall IsConduitEnabled()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!g_pConduit)
+		return false;
+
+	return g_pConduit->IsEnabled() ? true : false;
 }

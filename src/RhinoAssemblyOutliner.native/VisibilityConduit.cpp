@@ -130,6 +130,26 @@ bool CVisibilityConduit::ExecConduit(
 		}
 	}
 
+	// Selection highlight: if instance is selected, draw yellow wireframe overlay
+	if (pObject->IsSelected())
+	{
+		CRhinoDisplayPipeline_OGL* pOGL = dynamic_cast<CRhinoDisplayPipeline_OGL*>(&dp);
+		ON_Color selColor = RhinoApp().AppSettings().SelectedObjectColor();
+
+		for (int i = 0; i < componentCount; i++)
+		{
+			std::string path = std::to_string(i);
+			if (m_visData.IsComponentHidden(instanceId, path.c_str()))
+				continue;
+
+			const CRhinoObject* pComp = pDef->Object(i);
+			if (!pComp || !pComp->IsVisible())
+				continue;
+
+			dp.DrawWireframeObject(pComp, selColor, &instanceXform);
+		}
+	}
+
 	// CRITICAL: return true to continue the pipeline for other objects.
 	// return false would abort the ENTIRE frame!
 	return true;

@@ -11,3 +11,7 @@ EXPORTS
     ResetComponentVisibility
     SetDebugLogging
     GetNativeVersion
+    PersistVisibilityState
+    LoadVisibilityState
+    GetManagedInstances
+    IsConduitEnabled

@@ -47,6 +47,22 @@ public static class NativeVisibilityInterop
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
     public static extern int GetNativeVersion();
 
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern void PersistVisibilityState();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern void LoadVisibilityState();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern int GetManagedInstances(
+        [In, Out] Guid[] buffer,
+        int maxCount
+    );
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsConduitEnabled();
+
     /// <summary>
     /// Check if the native DLL exists next to the plugin.
     /// </summary>

@@ -46,4 +46,16 @@ extern "C"
 
 	/// Return the native DLL version for compatibility checks
 	NATIVE_API int __stdcall GetNativeVersion();
+
+	/// Save visibility state to UserData on all managed instances
+	NATIVE_API void __stdcall PersistVisibilityState();
+
+	/// Load visibility state from UserData on all instances in active doc
+	NATIVE_API void __stdcall LoadVisibilityState();
+
+	/// Get all managed instance IDs (returns count, fills buffer up to maxCount)
+	NATIVE_API int __stdcall GetManagedInstances(ON_UUID* buffer, int maxCount);
+
+	/// Check if native conduit is currently enabled
+	NATIVE_API bool __stdcall IsConduitEnabled();
 }
