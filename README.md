@@ -6,6 +6,12 @@ A dockable panel plugin that brings hierarchical block instance management to Rh
 
 > Screenshots coming soon
 
+<!-- TODO: Add screenshots
+![Assembly Tree View](docs/images/tree-view.png)
+![Visibility Control](docs/images/visibility-control.png)
+![Isolate Mode](docs/images/isolate-mode.png)
+-->
+
 ---
 
 ## Features
@@ -62,11 +68,11 @@ Search for **RhinoAssemblyOutliner** and install.
 
 ### Manual Install
 
-1. Download the latest `.rhp` file from [Releases](https://github.com/your-username/RhinoAssemblyOutliner/releases)
+1. Download the latest `.rhp` file from [Releases](https://github.com/McMuff86/RhinoAssemblyOutliner/releases)
 2. In Rhino 8, run `_PlugInManager`
 3. Click **Install…** and select the `.rhp` file
 4. Restart Rhino
-5. Run `OpenOutliner` to open the panel
+5. Run `AssemblyOutliner` to open the panel
 
 ---
 
@@ -79,7 +85,7 @@ Search for **RhinoAssemblyOutliner** and install.
 
 ## Usage
 
-1. Run `OpenOutliner` in the Rhino command line
+1. Run `AssemblyOutliner` in the Rhino command line
 2. The Assembly Outliner panel opens as a dockable side panel
 3. Your document's block hierarchy is displayed automatically
 4. Right-click any node for context menu actions (Select, Zoom To, Isolate, Hide, Edit Block, Properties)
@@ -95,7 +101,7 @@ Search for **RhinoAssemblyOutliner** and install.
 - **C++ DisplayConduit** intercepting `SC_DRAWOBJECT` for per-component draw control ✅ built
 - Hide individual components within a single block instance (not all instances of that definition)
 - `ON_UserData` persistence — hidden component state saved in `.3dm` files ✅ built
-- P/Invoke bridge with 12 native API functions ✅ built
+- P/Invoke bridge with 14 native API functions ✅ built
 - Document event handling (auto-sync on open/save/close) ✅ built
 - Path-based component addressing for nested blocks ✅ built
 - Performance target: >30 fps with 100+ managed instances
