@@ -284,7 +284,9 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     public void PanelClosing(uint documentSerialNumber, bool onCloseDocument)
     {
         UnsubscribeEvents();
+        _refreshTimer?.Stop();
         _refreshTimer?.Dispose();
+        _refreshTimer = null;
     }
 
     #endregion
