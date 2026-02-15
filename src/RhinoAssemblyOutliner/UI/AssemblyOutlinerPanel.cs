@@ -73,6 +73,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
         _refreshTimer.AutoReset = false;
         _refreshTimer.Elapsed += (s, e) => RefreshTreeDebounced();
         
+        MinimumSize = new Eto.Drawing.Size(300, 200);
         Content = BuildUI();
     }
 

@@ -98,21 +98,31 @@ public class AssemblyTreeView : TreeGridView
         AllowDrop = true;
 
         // Define columns
-        // Visibility toggle column (eye icon)
+        // Visibility toggle column (eye icon) — fixed width, not auto-sized
+        // Note: In Eto TreeGridView, column 0 shares space with the expand/collapse
+        // triangle, so we need enough width (40px) to keep the icon clickable.
         var visibilityColumn = new GridColumn
         {
             HeaderText = "👁",
-            DataCell = new TextBoxCell(0),  // Shows 👁 or 👁‍🗨 based on visibility
-            Width = 30,
+            DataCell = new TextBoxCell(0),
+            Width = 40,
+            Resizable = false,
+            AutoSize = false,
             Editable = false
         };
         Columns.Add(visibilityColumn);
 
+        // Name column — use fixed width instead of AutoSize to prevent
+        // the column from collapsing when nodes are collapsed/expanded.
+        // AutoSize recalculates based on visible content which causes
+        // the "must click Collapse All multiple times" issue.
         Columns.Add(new GridColumn
         {
             HeaderText = "Name",
             DataCell = new TextBoxCell(1),
-            AutoSize = true,
+            Width = 200,
+            AutoSize = false,
+            Resizable = true,
             Editable = false
         });
 
@@ -120,14 +130,16 @@ public class AssemblyTreeView : TreeGridView
         {
             HeaderText = "Layer",
             DataCell = new TextBoxCell(2),
-            Width = 120
+            Width = 120,
+            Resizable = true
         });
 
         Columns.Add(new GridColumn
         {
             HeaderText = "Type",
             DataCell = new TextBoxCell(3),
-            Width = 80
+            Width = 80,
+            Resizable = true
         });
 
         // Wire up events
