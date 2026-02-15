@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Eto.Drawing;
 using Eto.Forms;
 using Rhino;
@@ -32,6 +34,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private string _assemblyRootName = "";
     
     // Event debouncing
+    private Label _statusBar;
     private System.Timers.Timer _refreshTimer;
     private bool _needsRefresh;
     private bool _isSyncingFromViewport;
@@ -98,6 +101,19 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         // Toolbar
         var toolbar = BuildToolbar();
 
+        // Status bar
+        _statusBar = new Label
+        {
+            Text = "0 instances",
+            TextColor = Colors.Gray,
+            Font = SystemFonts.Label(SystemFonts.Default().Size - 1)
+        };
+        var statusPanel = new Panel
+        {
+            Content = _statusBar,
+            Padding = new Padding(6, 2)
+        };
+
         // Main layout
         var layout = new DynamicLayout();
         layout.BeginVertical();
@@ -105,6 +121,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         layout.Add(_searchBox);
         layout.EndVertical();
         layout.Add(splitter, yscale: true);
+        layout.Add(statusPanel);
 
         return layout;
     }
@@ -369,6 +386,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         EnsureVisibilityService();
         _visibilityService?.ToggleVisibility(node);
         _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnIsolateRequested(object sender, AssemblyNode node)
@@ -376,6 +394,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         EnsureVisibilityService();
         _visibilityService?.Isolate(node);
         _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnShowAllRequested(object sender, EventArgs e)
@@ -390,6 +409,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         EnsureVisibilityService();
         _visibilityService?.Hide(node);
         _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnShowRequested(object sender, AssemblyNode node)
@@ -397,6 +417,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         EnsureVisibilityService();
         _visibilityService?.Show(node);
         _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnZoomToRequested(object sender, AssemblyNode node)
@@ -439,6 +460,27 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     #region Tree Management
 
     /// <summary>
+    /// Updates the status bar with current counts.
+    /// </summary>
+    private void UpdateStatusBar(AssemblyNode root)
+    {
+        if (root == null)
+        {
+            _statusBar.Text = "0 instances";
+            return;
+        }
+
+        var allNodes = root.GetAllDescendants().OfType<BlockInstanceNode>().ToList();
+        int total = allNodes.Count;
+        int hidden = allNodes.Count(n => !n.IsVisible);
+        // Count isolated: if any are visible and some hidden, we're in isolate-like state
+        // Simple approach: show hidden count
+        var parts = new List<string> { $"{total} instances" };
+        if (hidden > 0) parts.Add($"{hidden} hidden");
+        _statusBar.Text = string.Join(" | ", parts);
+    }
+
+    /// <summary>
     /// Queues a debounced tree refresh.
     /// </summary>
     private void QueueRefresh()
@@ -479,6 +521,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
                 if (assemblyRoot != null)
                 {
                     _treeView.LoadTreeFromBlock(assemblyRoot);
+                    UpdateStatusBar(assemblyRoot);
                 }
                 else
                 {
@@ -494,6 +537,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
                 if (_rootNode != null)
                 {
                     _treeView.LoadTree(_rootNode);
+                    UpdateStatusBar(_rootNode);
                 }
             }
         }

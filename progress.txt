@@ -19,7 +19,7 @@
 [x] Suchfilter
 [x] Event-Debouncing
 
-## Phase 3: Services & Features 🔄
+## Phase 3: Services & Features ✅
 [x] SelectionSyncService (saubere Abstraktion)
 [x] VisibilityService (Show/Hide/Isolate)
 [x] Visibility Toggle im Tree (Auge-Icon Spalte)
@@ -30,7 +30,7 @@
 ## Phase 4: Polish & Performance
 [ ] Lazy Loading für grosse Dokumente
 [ ] Instance Count Caching
-[ ] Keyboard Shortcuts
+[x] Keyboard Shortcuts → Sprint 1
 [x] Panel Icon (manifest.yml vorbereitet)
 [x] Error Handling & Edge Cases (null checks, recursion limit, try-catch)
 
@@ -51,12 +51,7 @@
 [ ] Test-Server Deployment
 [ ] Production Release
 
-## Offene Fragen
-- [ ] Windows-only oder auch Mac?
-- [ ] Block Edit New Plugin Integration Priorität?
-- [ ] Performance-Schwelle für Lazy Loading?
-
-## Phase 7: Assembly Mode Feature 🆕
+## Phase 7: Assembly Mode Feature ✅
 [x] OutlinerViewMode enum
 [x] Mode dropdown in toolbar
 [x] "Set as Assembly Root" im Kontextmenü
@@ -65,8 +60,7 @@
 [ ] Persistenz (UserText) - Phase 2
 [ ] Recent Assemblies Liste - Phase 2
 
-## Phase 8: Per-Instance Component Visibility 🔬 (C# PoC - ABGESCHLOSSEN)
-# Game-changer Feature: Hide components within ONE instance only (not native in Rhino)
+## Phase 8: Per-Instance Component Visibility 🔬 (C# PoC — ABGESCHLOSSEN)
 [x] Research: DisplayConduit approach, API limitations analysiert
 [x] ComponentVisibilityData (UserData für State-Speicherung)
 [x] PerInstanceVisibilityConduit (DisplayConduit für Custom Drawing)
@@ -85,7 +79,6 @@
 - ❌ Display Cache Integration fehlt
 
 ## Phase 9: C++ SDK Implementation 🔧
-# Siehe docs/CPP_ROADMAP.md
 [x] Rhino 8 C++ SDK Setup
 [x] Hello World C++ Plugin (MFC DLL, .def Exports)
 [x] CRhinoDisplayConduit Research (CPP_SDK_RESEARCH.md)
@@ -99,7 +92,7 @@
 [ ] UI Integration im Outliner (Eye-Icon → SetComponentVisibility aufrufen)
 [ ] Real-World Testing in Rhino (Ghost Artifacts? Selection? Performance?)
 
-## Phase 10: CAD Research & Synthesis 🔬
+## Phase 10: CAD Research & Synthesis ✅
 [x] SolidWorks FeatureManager Deep-Dive (Research Agent 1)
 [x] CAD Industry Analysis: Inventor, Fusion, CATIA, NX (Research Agent 2)
 [x] Synthesis & Recommendations (Coordinator)
@@ -109,11 +102,69 @@
 [x] AGENTS.md: Multi-Agent Setup dokumentiert
 [x] progress.txt: Vollständige Chronologie
 
+## Phase 11: Think Tank & Architecture ✅
+[x] Think Tank 1: UX & Feature Analysis (SolidWorks patterns, quick wins, workflows)
+[x] Think Tank 2: Deep Technical Architecture Analysis (code quality, threading, risks)
+[x] Architecture V2 document (hybrid C++/C#, data flow, state management)
+[x] C++ SDK Deep Dive research (SC_DRAWOBJECT validation, CRhinoCacheHandle)
+[x] Sprint Plan created (4 sprints, v1.0 → v2.0)
+[x] 5 ADRs written (hybrid arch, per-instance vis, persistence, performance, threading)
+
+## Sprint 1: v0.2.0 — UX Polish (IN PROGRESS) 🔄
+[~] 1.1 Keyboard shortcuts (H, S, I, Space, F, Del, Enter)
+[~] 1.2 Grayed styling for hidden items (gray text, gray icon, italic)
+[~] 1.3 Mixed-state parent eye icon (◐)
+[~] 1.4 Show All action + Space shortcut
+[~] 1.5 Show with Dependents (recursive show)
+[~] 1.6 Hide with Dependents (recursive hide)
+[~] 1.7 Isolate enter/exit flow (banner, exit button, Esc, state restore)
+[~] 1.8 Collapse All / Expand All toolbar buttons
+[~] 1.9 Double-click → BlockEdit
+[~] 1.10 Status bar ("N instances, N definitions, N hidden")
+[~] 1.11 Context menu restructure (Visibility/Selection/Navigation/Editing sections)
+
+## Sprint 2: v1.0 — Stable Release (PLANNED)
+[ ] 2.1 Bug bash
+[ ] 2.2 Fix VisibilityService doc reference leak
+[ ] 2.3 Fix duplicate panel registration
+[ ] 2.4 IDisposable on panel
+[ ] 2.5 Unit tests (≥80% model coverage)
+[ ] 2.6 Plugin icon (256x256 PNG)
+[ ] 2.7 README with screenshots
+[ ] 2.8 Yak package build script
+[ ] 2.9 Clean Rhino 8 install test
+[ ] 2.10 Publish v1.0 to Yak
+
+## Sprint 3: v2.0-alpha — C++ Validation (PLANNED)
+[ ] 3.1 C++ SDK setup + hello world .rhp
+[ ] 3.2 SC_DRAWOBJECT validation (block intercept + shift test)
+[ ] 3.3 Per-component draw test (skip one component)
+[ ] 3.4 Selection highlight test
+[ ] 3.5 CComponentVisibilityData (ON_UserData + serialization)
+[ ] 3.6 P/Invoke bridge (10 extern C functions + C# wrapper)
+[ ] 3.7 Integration smoke test (end-to-end)
+
+## Sprint 4: v2.0 — Full Per-Instance Component Visibility (PLANNED)
+[ ] 4.1 Display cache integration (CRhinoCacheHandle)
+[ ] 4.2 Thread safety (shared_mutex)
+[ ] 4.3 Definition change handler (validate UUIDs on BlockEdit exit)
+[ ] 4.4 Tree UI for component visibility (eye icon per component)
+[ ] 4.5 Mixed state indicators for component visibility
+[ ] 4.6 Performance testing (100+ managed instances, >30fps)
+[ ] 4.7 Edge case testing (copy/paste, undo/redo, linked blocks, nested)
+[ ] 4.8 Build system (single solution, both projects)
+[ ] 4.9 Yak package v2.0
+
 ## Key Research Findings
 - MVP MUST-HAVES: Eye Icon Toggle, Per-Instance Visibility, Tree, Bidirectional Selection
 - UX Patterns von SolidWorks übernehmen: Eye Icons, Grayed Hidden, Isolate Mode
 - Rhino-Adaptionen: Layer Integration, BlockEdit statt Edit-in-Context
 - v2 Features: Named Display States, Keyboard Shortcuts, Show with Dependents
+
+## Offene Fragen
+- [ ] Windows-only oder auch Mac?
+- [ ] Block Edit New Plugin Integration Priorität?
+- [ ] Performance-Schwelle für Lazy Loading?
 
 ## Notizen
 - 2026-02-05: Projekt gestartet, Phase 1+2 abgeschlossen
@@ -125,3 +176,7 @@
 - 2026-02-05: Native DLL Scaffold erstellt (P/Invoke Stubs)
 - 2026-02-06: C++ VisibilityConduit implementiert (VisibilityData.h, VisibilityConduit.h/cpp, NativeApi wired)
 - 2026-02-06: Build erfolgreich, API-Fix: dp.DrawObject statt type-specific Draw calls
+- 2026-02-15: Think Tank 1 & 2 completed (UX analysis, tech architecture)
+- 2026-02-15: Architecture V2, Sprint Plan, 5 ADRs written
+- 2026-02-15: C++ SDK Deep Dive research completed
+- 2026-02-15: Comprehensive documentation update (user guide, changelog, contributing)
