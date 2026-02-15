@@ -8,6 +8,11 @@ namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 /// P/Invoke declarations for the C++ native visibility DLL.
 /// The native DLL must be placed next to the .rhp plugin file.
 /// API v2: uses dot-separated path strings instead of flat int indices.
+/// 
+/// B4 Note: System.Guid and ON_UUID (OpenNurbs) are binary-compatible — both are
+/// 16-byte structs with identical layout (uint32 + uint16 + uint16 + byte[8]).
+/// 'ref Guid' marshals as a pointer matching 'const ON_UUID*' on the C++ side.
+/// A static_assert in NativeApi.cpp validates sizeof(ON_UUID) == 16 at compile time.
 /// </summary>
 public static class NativeVisibilityInterop
 {

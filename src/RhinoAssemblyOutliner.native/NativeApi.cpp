@@ -6,6 +6,11 @@
 #include "DocEventHandler.h"
 #include "Constants.h"
 
+// B4: Validate that System.Guid (C#) and ON_UUID are binary-compatible for P/Invoke.
+// Both are 16-byte structs with identical memory layout (Data1/Data2/Data3/Data4).
+// C# marshals 'ref Guid' as a pointer, which the C++ side receives as 'const ON_UUID*'.
+static_assert(sizeof(ON_UUID) == 16, "ON_UUID must be 16 bytes to match System.Guid layout");
+
 // Version: increment when API changes (4 = ComponentState enum + conduit improvements)
 static const int NATIVE_API_VERSION = 4;
 
