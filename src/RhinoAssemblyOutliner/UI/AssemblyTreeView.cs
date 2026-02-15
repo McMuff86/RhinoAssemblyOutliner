@@ -20,6 +20,11 @@ public class AssemblyTreeView : TreeGridView
     private Font _hiddenFont;
 
     /// <summary>
+    /// Func to resolve the active document. Set by parent panel to centralize doc access.
+    /// </summary>
+    public Func<RhinoDoc> GetDoc { get; set; } = () => RhinoDoc.ActiveDoc;
+
+    /// <summary>
     /// Raised when selection changes.
     /// </summary>
     public new event EventHandler<AssemblyNode> SelectionChanged;
@@ -214,7 +219,7 @@ public class AssemblyTreeView : TreeGridView
                 if (node is BlockInstanceNode bn && bn.InstanceId != Guid.Empty)
                 {
                     // Select the instance first so BlockEdit targets it
-                    var doc = RhinoDoc.ActiveDoc;
+                    var doc = GetDoc();
                     if (doc != null)
                     {
                         doc.Objects.UnselectAll();
@@ -339,7 +344,7 @@ public class AssemblyTreeView : TreeGridView
         var item = SelectedItem as AssemblyTreeItem;
         if (item?.Node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc != null)
             {
                 doc.Objects.UnselectAll();
@@ -354,7 +359,7 @@ public class AssemblyTreeView : TreeGridView
         var item = SelectedItem as AssemblyTreeItem;
         if (item?.Node is BlockInstanceNode blockNode)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc != null)
             {
                 var definition = doc.InstanceDefinitions[blockNode.BlockDefinitionIndex];
@@ -377,7 +382,7 @@ public class AssemblyTreeView : TreeGridView
         var item = SelectedItem as AssemblyTreeItem;
         if (item?.Node is BlockInstanceNode blockNode)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             blockNode.ZoomToInstance(doc);
         }
     }

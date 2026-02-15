@@ -47,6 +47,12 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     public static Guid PanelId => typeof(AssemblyOutlinerPanel).GUID;
 
     /// <summary>
+    /// Gets the document associated with this panel via serial number.
+    /// Centralizes doc access to avoid scattered RhinoDoc.ActiveDoc calls.
+    /// </summary>
+    private RhinoDoc GetDoc() => RhinoDoc.FromRuntimeSerialNumber(_documentSerialNumber);
+
+    /// <summary>
     /// Creates a new Assembly Outliner panel.
     /// </summary>
     /// <param name="documentSerialNumber">The document this panel is associated with.</param>
@@ -76,6 +82,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
         // Tree view (main content)
         _treeView = new AssemblyTreeView();
+        _treeView.GetDoc = GetDoc;
         _treeView.SelectionChanged += OnTreeSelectionChanged;
         _treeView.NodeActivated += OnTreeNodeActivated;
         _treeView.VisibilityToggleRequested += OnVisibilityToggleRequested;
@@ -117,10 +124,34 @@ public class AssemblyOutlinerPanel : Panel, IPanel
             Padding = new Padding(6, 2)
         };
 
+        // Isolate banner (hidden by default)
+        _isolateBannerLabel = new Label
+        {
+            Text = "",
+            TextColor = Colors.White,
+            Font = SystemFonts.Bold()
+        };
+        var exitIsolateButton = new Button { Text = "✕ Exit Isolate", Width = 100 };
+        exitIsolateButton.Click += (s, e) => ExitIsolateMode();
+        var bannerContent = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Padding = new Padding(8, 4),
+            Items = { _isolateBannerLabel, new StackLayoutItem(null, true), exitIsolateButton }
+        };
+        _isolateBanner = new Panel
+        {
+            Content = bannerContent,
+            BackgroundColor = Color.FromArgb(50, 100, 180),
+            Visible = false
+        };
+
         // Main layout
         var layout = new DynamicLayout();
         layout.BeginVertical();
         layout.Add(toolbar);
+        layout.Add(_isolateBanner);
         layout.Add(_searchBox);
         layout.EndVertical();
         layout.Add(splitter, yscale: true);
@@ -356,7 +387,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
             _isSyncingFromTree = true;
             try
             {
-                var doc = RhinoDoc.ActiveDoc;
+                var doc = GetDoc();
                 if (doc != null && blockNode.InstanceId != Guid.Empty)
                 {
                     doc.Objects.UnselectAll();
@@ -376,7 +407,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         // Double-click: Zoom to object
         if (node is BlockInstanceNode blockNode)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc != null)
             {
                 blockNode.ZoomToInstance(doc);
@@ -394,18 +425,125 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
     private void OnIsolateRequested(object sender, AssemblyNode node)
     {
-        EnsureVisibilityService();
-        _visibilityService?.Isolate(node);
-        _treeView.ReloadData();
-        UpdateStatusBar(_rootNode);
+        if (_isIsolated)
+            ExitIsolateMode();
+        EnterIsolateMode(node);
     }
 
     private void OnShowAllRequested(object sender, EventArgs e)
     {
+        if (_isIsolated)
+        {
+            ExitIsolateMode();
+        }
+        else
+        {
+            EnsureVisibilityService();
+            _visibilityService?.ShowAll();
+            RefreshTree();
+        }
+    }
+
+    #region Isolate Mode
+
+    /// <summary>
+    /// Enters isolate mode: stores current visibility, hides everything except
+    /// the selected node and its children.
+    /// </summary>
+    private void EnterIsolateMode(AssemblyNode node)
+    {
+        var doc = GetDoc();
+        if (doc == null) return;
+
         EnsureVisibilityService();
-        _visibilityService?.ShowAll();
+
+        // Store pre-isolate visibility state
+        _preIsolateVisibilityState.Clear();
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        {
+            _preIsolateVisibilityState[obj.Id] = obj.Visible;
+        }
+
+        // Hide everything
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        {
+            doc.Objects.Hide(obj.Id, ignoreLayerMode: false);
+        }
+
+        // Show the selected node, its ancestors, and all its children
+        ShowNodeAndDescendants(node, doc);
+        doc.Views.Redraw();
+
+        // Update UI
+        _isIsolated = true;
+        _isolatedNodeName = node.DisplayName;
+        _isolateBannerLabel.Text = $"🔍 ISOLATED: {_isolatedNodeName}";
+        _isolateBanner.Visible = true;
+
         RefreshTree();
     }
+
+    /// <summary>
+    /// Exits isolate mode and restores the pre-isolate visibility state.
+    /// </summary>
+    private void ExitIsolateMode()
+    {
+        var doc = GetDoc();
+        if (doc == null || !_isIsolated) return;
+
+        // Restore pre-isolate visibility state
+        foreach (var kvp in _preIsolateVisibilityState)
+        {
+            if (kvp.Value)
+                doc.Objects.Show(kvp.Key, ignoreLayerMode: false);
+            else
+                doc.Objects.Hide(kvp.Key, ignoreLayerMode: false);
+        }
+        _preIsolateVisibilityState.Clear();
+        doc.Views.Redraw();
+
+        _isIsolated = false;
+        _isolatedNodeName = "";
+        _isolateBanner.Visible = false;
+
+        RefreshTree();
+    }
+
+    /// <summary>
+    /// Shows a node, its parent chain, and all descendants.
+    /// </summary>
+    private void ShowNodeAndDescendants(AssemblyNode node, RhinoDoc doc)
+    {
+        if (node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
+        {
+            doc.Objects.Show(blockNode.InstanceId, ignoreLayerMode: false);
+            node.IsVisible = true;
+        }
+
+        // Show parent chain
+        var parent = node.Parent;
+        while (parent != null)
+        {
+            if (parent is BlockInstanceNode parentBlock && parentBlock.InstanceId != Guid.Empty)
+            {
+                doc.Objects.Show(parentBlock.InstanceId, ignoreLayerMode: false);
+                parent.IsVisible = true;
+            }
+            parent = parent.Parent;
+        }
+
+        // Show all descendants
+        foreach (var child in node.GetAllDescendants())
+        {
+            if (child is BlockInstanceNode childBlock && childBlock.InstanceId != Guid.Empty)
+            {
+                doc.Objects.Show(childBlock.InstanceId, ignoreLayerMode: false);
+                child.IsVisible = true;
+            }
+        }
+    }
+
+    #endregion
     
     private void OnHideRequested(object sender, AssemblyNode node)
     {
@@ -427,7 +565,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     {
         if (node is BlockInstanceNode blockNode)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc != null)
             {
                 blockNode.ZoomToInstance(doc);
@@ -463,7 +601,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
     private void EnsureVisibilityService()
     {
-        var doc = RhinoDoc.ActiveDoc;
+        var doc = GetDoc();
         if (doc == null) return;
 
         // Recreate if doc changed or not yet created
@@ -496,6 +634,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         // Simple approach: show hidden count
         var parts = new List<string> { $"{total} instances" };
         if (hidden > 0) parts.Add($"{hidden} hidden");
+        if (_isIsolated) parts.Add($"🔍 ISOLATED: {_isolatedNodeName}");
         _statusBar.Text = string.Join(" | ", parts);
     }
 
@@ -527,7 +666,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     {
         try
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc == null) return;
 
             var builder = new AssemblyTreeBuilder(doc);
