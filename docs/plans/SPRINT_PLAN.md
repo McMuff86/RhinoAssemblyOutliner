@@ -1,130 +1,255 @@
-# Sprint Plan: RhinoAssemblyOutliner v1.0 → v2.0
+# Sprint Plan — RhinoAssemblyOutliner
 
-## Strategy
-
-Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance component visibility for v2.0.
-
----
-
-## Sprint 1: v1.0-rc — UX Polish (C# only) ✅ DONE
-
-**Duration:** 1 week  
-**Status:** ✅ COMPLETED (2026-02-15)  
-**Goal:** All TT1 quick wins implemented. Plugin feels professional.
-
-| # | Task | Effort | Depends On | Acceptance Criteria |
-|---|------|--------|-----------|-------------------|
-| 1.1 | **Keyboard shortcuts** (H, Shift+H, I, Esc, F, Ctrl+H, Space, Enter) | 3h | — | All shortcuts work when tree has focus. Tooltips show shortcut keys. |
-| 1.2 | **Grayed styling for hidden items** — gray text, gray icon, italic | 1.5h | — | Hidden nodes visually distinct. Toggling updates immediately. |
-| 1.3 | **Mixed-state parent eye icon (◐)** | 1.5h | — | Parent with some hidden children shows half-eye. Updates on child toggle. |
-| 1.4 | **Show All action** + Ctrl+H shortcut | 30min | 1.1 | All nodes visible after action. Works from any state including isolate. |
-| 1.5 | **Show with Dependents** (recursive show) | 2h | — | Right-click → Show with Dependents shows node + all descendants. |
-| 1.6 | **Hide with Dependents** (recursive hide) | 1h | 1.5 | Same as above but hide. Shares recursive helper. |
-| 1.7 | **Isolate enter/exit flow** — banner, exit button, Esc to exit, state restore | 3h | 1.1 | Banner shows "Isolate Mode — N of M visible". Esc restores pre-isolate state. |
-| 1.8 | **Collapse All / Expand All** toolbar buttons | 30min | — | Buttons in toolbar. Work on current tree. |
-| 1.9 | **Double-click → BlockEdit** | 30min | — | Double-click on block instance node starts BlockEdit command. |
-| 1.10 | **Status bar** — "156 instances, 12 definitions, 3 hidden" | 1h | — | Updates on tree rebuild and visibility changes. |
-| 1.11 | **Context menu restructure** per TT1 §2.3 | 1.5h | 1.5, 1.6 | Menu has Visibility, Selection, Navigation, Editing sections. |
-
-**Total estimated: ~16 hours**
-
-**Sprint 1 Deliverables:**
-- All 11 tasks completed and reviewed
-- Refactoring checklist items 1-3 done (stable node IDs, doc reference leak fix, ObservableCollection removal)
-- Code review passed (see `docs/plans/REVIEW_SPRINT1.md`)
+> **Letzte Aktualisierung:** 2026-02-15  
+> **Branch:** `nightly/15-02-sprint1-refactor`  
+> **Verfügbare Zeit:** ~10-15h/Woche (Abende/Wochenenden) + Nacht-Sessions mit Agents
 
 ---
 
-## Sprint 2: v1.0 — Release (~40% complete)
+## Übersicht
 
-**Duration:** 1 week  
-**Status:** 🔄 IN PROGRESS (~40%)  
-**Goal:** Stable release on Yak package manager.
+**Vision:** Der fehlende Assembly Manager für Rhino — SolidWorks-artige UX mit Per-Instance Component Visibility als USP.
 
-| # | Task | Effort | Depends On | Acceptance Criteria |
-|---|------|--------|-----------|-------------------|
-| 2.1 | **Bug bash** — systematic testing of all features | 4h | Sprint 1 | All features work without crashes. |
-| 2.2 | **Fix VisibilityService doc reference leak** — recreate on doc change | 1h | — | Service handles document switches. No stale doc references. |
-| 2.3 | **Fix duplicate panel registration** — move to Plugin.OnLoad() | 30min | — | Registration in one place only. |
-| 2.4 | **IDisposable on panel** — proper timer cleanup | 30min | — | Timer disposed on panel GC. |
-| 2.5 | **Unit tests for model layer** (AssemblyNode, tree operations) | 4h | — | ≥80% coverage on model classes. Pure logic, no Rhino dependency. |
-| 2.6 | **Plugin icon** (256×256 PNG) | 1h | — | Icon shows in Rhino panel list. |
-| 2.7 | **README with screenshots** | 2h | 2.1 | Clear install instructions, feature overview, screenshots. |
-| 2.8 | **Yak package build script** | 2h | 2.6 | `yak build` produces installable package. |
-| 2.9 | **Test on clean Rhino 8 install** | 2h | 2.8 | Plugin loads, all features work, no missing dependencies. |
-| 2.10 | **Publish v1.0 to Yak** | 1h | 2.9 | Package available via `_PackageManager`. |
+**Ziel v1.0:** Polished C#-only Plugin auf Yak veröffentlichen.  
+**Ziel v2.0:** Per-Instance Component Visibility (C++ Conduit) produktionsreif.  
+**Ziel v3.0:** SolidWorks-Parity (Display States, BOM, Multi-Select) + Beyond.
 
-**Total estimated: ~18 hours**
+**Timeline (realistisch bei 10-15h/Woche):**
 
----
-
-## Sprint 3: v2.0-alpha — C++ Validation (started early)
-
-**Duration:** 2 weeks  
-**Status:** 🔄 IN PROGRESS — C++ foundation built ahead of schedule  
-**Goal:** Confirm SC_DRAWOBJECT approach works for blocks. This is the #1 project risk.
-
-**Early progress (done during Sprint 1/2 refactoring):**
-- ✅ 3.1: C++ SDK setup, VS project, build config (`build-native.ps1`), PlatformToolset v143
-- ✅ 3.5: `CComponentVisibilityData` ON_UserData with chunked Write/Read serialization
-- ✅ 3.6: P/Invoke bridge — all 14 extern C functions implemented, NativeApi.h/.cpp complete
-- ✅ DocEventHandler: auto-sync on open/save/close/delete (not in original sprint plan)
-- ✅ VisibilityConduit: SC_DRAWOBJECT interception with path-based filtering + nested block recursion
-
-**Sprint 3 C++ improvements (2026-02-15):**
-- ✅ ComponentState enum — 4-state model (Visible/Hidden/Suppressed/Transparent) replacing boolean visibility
-- ✅ SetComponentState / GetComponentState API functions
-- ✅ Snapshot pattern — `CVisibilitySnapshot` for lock-free per-frame rendering
-- ✅ SC_CALCBOUNDINGBOX — correct ZoomExtents (suppressed components excluded)
-- ✅ SC_POSTDRAWOBJECTS — selection highlights via DrawObject (no heap allocs)
-- ✅ SC_PREDRAWOBJECTS — frame-start snapshot acquisition
-- ✅ HasHiddenDescendants optimization — O(1) prefix lookup via precomputed set
-- ✅ API version bumped to 4
-- ⏳ 3.2-3.4: Validation testing in Rhino (pending Windows build + runtime test)
-- ⏳ 3.7: End-to-end integration smoke test
-
-| # | Task | Effort | Depends On | Acceptance Criteria |
-|---|------|--------|-----------|-------------------|
-| 3.1 | **C++ SDK setup** — install SDK, VS project, build config, hello world .rhp | 1d | — | C++ plugin loads in Rhino 8, prints to command line. |
-| 3.2 | **SC_DRAWOBJECT validation** — minimal conduit that intercepts a block instance and draws it shifted 10 units | 2d | 3.1 | Block appears shifted. No ghost at original position. Rotate viewport — no artifacts. |
-| 3.3 | **Per-component draw test** — intercept block, iterate definition objects, draw each with instance transform, skip one | 2d | 3.2 | One component hidden. Others render correctly in all display modes (wireframe, shaded, rendered). |
-| 3.4 | **Selection highlight test** — verify selected managed instance shows yellow highlight | 1d | 3.3 | Select block → yellow wireframe on visible components. |
-| 3.5 | **CComponentVisibilityData** — ON_UserData with UUID list, Write/Read serialization | 1d | 3.1 | Save file → reopen → hidden component data intact. |
-| 3.6 | **P/Invoke bridge** — implement 10 extern C functions, C# NativeInterop wrapper | 2d | 3.3, 3.5 | C# can call all native functions. GUID marshalling works. Error handling for missing DLL. |
-| 3.7 | **Integration smoke test** — C# UI calls C++ to hide a component, viewport updates | 1d | 3.6 | End-to-end: click eye in tree → component disappears in viewport via C++ conduit. |
-
-**Total estimated: ~10 working days**
-
-**EXIT GATE:** If 3.2 fails (SC_DRAWOBJECT doesn't work for blocks), execute fallback plan from ADR-002 before proceeding.
+| Milestone | Sprint | Ziel-Datum | Status |
+|-----------|--------|-----------|--------|
+| v1.0-rc | Sprint 1 | ✅ 2026-02-15 | ✅ DONE |
+| v1.0 | Sprint 2 | KW 9 (Ende Feb) | 🔄 ~50% |
+| v2.0-alpha | Sprint 3 | KW 11 (Mitte Mär) | 🔄 ~60% |
+| v2.0 | Sprint 4 | KW 14 (Ende Mär) | ⏳ |
+| v2.1 Quick Wins | Sprint 5 | KW 17 (Ende Apr) | ⏳ |
+| v3.0 Parity | Sprint 6-7 | KW 24 (Mitte Jun) | ⏳ |
+| v4.0 Beyond | Sprint 8+ | Q3 2026 | ⏳ |
 
 ---
 
-## Sprint 4: v2.0 — Full Per-Instance Component Visibility
+## Sprint 1: v1.0-rc — UX Polish ✅ DONE
 
-**Duration:** 2 weeks  
-**Goal:** Production-quality component visibility integrated into the outliner UI.
+**Dauer:** 1 Woche | **Status:** ✅ KOMPLETT (2026-02-15) | **Effort:** ~16h
 
-| # | Task | Effort | Depends On | Acceptance Criteria |
-|---|------|--------|-----------|-------------------|
-| 4.1 | **Display cache integration** — CRhinoCacheHandle per managed instance | 2d | Sprint 3 | Managed instances don't re-process geometry every frame. Measurable FPS improvement. |
-| 4.2 | **Thread safety** — shared_mutex on conduit state, Interlocked on C# flags | 1d | Sprint 3 | No crashes under rapid toggle + viewport rotation. |
-| 4.3 | **Definition change handler** — validate UUIDs on BlockEdit exit, prune stale | 1d | 3.5 | Edit block definition → stale hidden UUIDs removed. Valid ones survive. |
-| 4.4 | **Tree UI for component visibility** — expand block to see components, eye icon per component | 2d | Sprint 3 | Component nodes appear under block instances. Eye toggle works per-component. |
-| 4.5 | **Mixed state indicators** — parent shows ◐ when some components hidden | 1d | 4.4 | Visual indicator propagates up tree correctly. |
-| 4.6 | **Performance testing** — 100+ managed instances, profile, optimize | 2d | 4.1 | >30fps with 100 managed instances (20 components each) during viewport rotation. |
-| 4.7 | **Edge case testing** — copy/paste managed instance, undo/redo, linked blocks, nested blocks | 2d | 4.3 | All edge cases documented and handled. No crashes, no data loss. |
-| 4.8 | **Build system** — single solution builds both projects, C# copies C++ output | 1d | — | `dotnet build` (or VS Build) produces both .rhp files in output directory. |
-| 4.9 | **Yak package v2.0** — bundle both .rhp files | 1d | 4.8 | Package installs both plugins. Component visibility works out of box. |
+- [x] 1.1 Keyboard Shortcuts (H, Shift+H, I, Esc, F, Ctrl+H, Space, Enter) — 3h
+- [x] 1.2 Grayed/italic Styling für Hidden Items — 1.5h
+- [x] 1.3 Mixed-State Parent Eye Icon (◐) — 1.5h
+- [x] 1.4 Show All + Ctrl+Shift+H — 30min
+- [x] 1.5 Show with Dependents (rekursiv) — 2h
+- [x] 1.6 Hide with Dependents (rekursiv) — 1h
+- [x] 1.7 Isolate Mode mit Banner + Esc Exit + State Restore — 3h
+- [x] 1.8 Collapse All / Expand All Toolbar — 30min
+- [x] 1.9 Double-Click → BlockEdit — 30min
+- [x] 1.10 Status Bar — 1h
+- [x] 1.11 Context Menu Restructure — 1.5h
 
-**Total estimated: ~13 working days**
+**Bonus (erledigt):**
+- [x] Refactoring Items 1-3 (Stable Node IDs, Doc Reference Leak, ObservableCollection) — *Quelle: REVIEW_SPRINT1*
+- [x] IDisposable Pattern, XML Docs, EditorConfig — *Quelle: Review*
+- [x] Drag & Drop + Ctrl+Up/Down Reorder — *Quelle: Think Tank*
 
 ---
 
-## Milestone Summary
+## Sprint 2: v1.0 — Release Prep (aktuelle Woche)
 
-| Milestone | Date (est.) | Deliverable |
-|-----------|------------|-------------|
-| v1.0-rc | Week 1 end | ✅ All quick wins, polished C# plugin |
-| v1.0 | Week 2 end | 🔄 ~40% — bug bash, tests, packaging |
-| v2.0-alpha | Week 4 end | 🔄 C++ foundation built, validation pending |
-| v2.0 | Week 6 end | Full component visibility, Yak v2 release |
+**Dauer:** 1 Woche | **Status:** 🔄 ~50% | **Effort geplant:** ~18h
+
+### Bereits erledigt
+- [x] 2.2 Fix VisibilityService Doc Reference Leak — 1h — *Quelle: Refactoring Checklist*
+- [x] 2.3 Fix Duplicate Panel Registration → Plugin.OnLoad() — 30min — *Quelle: Review*
+- [x] 2.4 IDisposable auf Panel (Timer Cleanup) — 30min — *Quelle: Review*
+
+### Offen
+- [ ] 2.1 **Bug Bash** — systematisches Testen ALLER Features in Rhino 8 — 4h — *⚠️ Adi hat noch NIE in Rhino getestet!*
+- [ ] 2.5 Unit Tests für Model Layer (AssemblyNode, Tree Ops) — 4h — Ziel: ≥80% Coverage — *teilweise vorhanden (4 Test-Dateien existieren)*
+- [ ] 2.6 Plugin Icon (256×256 PNG) — 1h
+- [x] 2.7 README mit Screenshots + Fixes — 2h — *Quelle: Doc Audit* ✅ 2026-02-15
+  - [x] GitHub-Username in Release-Link (`McMuff86`) — *Quelle: Doc Audit Prio 1*
+  - [x] Command-Name verifizieren → `AssemblyOutliner` — *Quelle: Doc Audit Prio 1*
+  - [x] API-Funktionen-Anzahl korrigiert (12 → 14) — *Quelle: Doc Audit*
+- [ ] 2.8 Yak Package Build Script finalisieren — 2h — *`build-yak.ps1` existiert bereits*
+- [ ] 2.9 Test auf cleanem Rhino 8 Install — 2h — Abhängig von: 2.8
+- [ ] 2.10 Publish v1.0 auf Yak — 1h — Abhängig von: 2.9
+
+### Doc-Fixes (parallel, low effort)
+- [x] 2.11 Sprint Plan Status aktualisieren (dieses Dokument) — 30min — *Quelle: Doc Audit* ✅ 2026-02-15
+- [x] 2.12 CLAUDE.md: fehlende Files in Struktur ergänzen (NativeVisibilityInterop.cs, TestNativeVisibilityCommand.cs) — 15min — *Quelle: Doc Audit* ✅ 2026-02-15
+- [x] 2.13 CONTRIBUTING.md Duplikat auflösen (root vs docs/) — 15min — *Quelle: Doc Audit* ✅ 2026-02-15
+- [x] 2.14 ARCHITECTURE.md v1 → Verweis auf V2 — 15min — *Quelle: Doc Audit* ✅ 2026-02-15
+
+**Sprint 2 Total verbleibend: ~12h**
+
+---
+
+## Sprint 3: C++ Conduit Validation & Per-Instance Visibility
+
+**Dauer:** 2 Wochen | **Status:** 🔄 ~60% (Infrastruktur steht, Validation pending) | **Effort geplant:** ~20h verbleibend
+
+### Bereits erledigt (während Sprint 1/2)
+- [x] 3.1 C++ SDK Setup, VS Project, Build Config (`build-native.ps1`) — *PlatformToolset v143*
+- [x] 3.5 `CComponentVisibilityData` ON_UserData mit Chunked Serialization
+- [x] 3.6 P/Invoke Bridge — alle 14 extern C Funktionen, NativeApi.h/.cpp
+- [x] 3.A DocEventHandler: Auto-Sync on open/save/close/delete
+- [x] 3.B VisibilityConduit: SC_DRAWOBJECT Interception + Nested Block Recursion
+- [x] 3.C ComponentState Enum (Visible/Hidden/Suppressed/Transparent)
+- [x] 3.D Snapshot Pattern (`CVisibilitySnapshot` für lock-free Rendering)
+- [x] 3.E SC_CALCBOUNDINGBOX — korrektes ZoomExtents
+- [x] 3.F SC_POSTDRAWOBJECTS — Selection Highlights via DrawObject *(ohne Heap-Allokationen)*
+- [x] 3.G SC_PREDRAWOBJECTS — Frame-Start Snapshot
+- [x] 3.H HasHiddenDescendants — O(1) Prefix-Lookup
+- [x] 3.I API Version 4
+
+### Offen — Validation (⚠️ EXIT GATE)
+- [ ] 3.2 **SC_DRAWOBJECT Validation** — Block-Instanz intercepten, shifted zeichnen, kein Ghost — 4h — *Benötigt Windows + Rhino 8*
+- [ ] 3.3 **Per-Component Draw Test** — Definition-Objekte einzeln zeichnen, eines skippen — 4h — Abhängig von: 3.2
+- [ ] 3.4 **Selection Highlight Test** — gelbes Wireframe auf managed Instance — 2h — Abhängig von: 3.3
+- [ ] 3.7 **End-to-End Smoke Test** — C# UI → C++ Hide → Viewport Update — 4h — Abhängig von: 3.4
+
+### C++ Performance Fixes
+- [ ] 3.8 **Selection Highlight Heap-Fix verifizieren** — Bestätigen dass SC_POSTDRAWOBJECTS + DrawObject keine Allokationen macht — 1h — *Quelle: Think Tank Features §3.4*
+- [ ] 3.9 **Node-ID Stabilität** — C++ Seite verwendet stabile Rhino GUIDs (nicht NewGuid) — 1h — *Quelle: Think Tank Features §3.1*
+
+**EXIT GATE:** Wenn 3.2 fehlschlägt → Fallback-Plan aus ADR-002 ausführen.
+
+**Sprint 3 Total verbleibend: ~16h**
+
+---
+
+## Sprint 4: v2.0 — Component Visibility UI Integration
+
+**Dauer:** 2 Wochen | **Status:** ⏳ | **Effort:** ~25h
+
+- [ ] 4.1 **Component Tree Nodes** — Block-Instanzen expandierbar zu Komponenten — 6h — Abhängig von: Sprint 3 — *Quelle: Think Tank Features §4*
+- [ ] 4.2 **Eye-Click Routing** — Klick auf Komponenten-Eye → C++ SetComponentState via P/Invoke — 3h — Abhängig von: 4.1
+- [ ] 4.3 **Display Cache Integration** — CRhinoCacheHandle pro managed Instance — 4h — *Quelle: Sprint Plan alt 4.1*
+- [ ] 4.4 **Thread Safety** — shared_mutex auf Conduit State, Interlocked auf C# Flags — 2h — *Quelle: Think Tank Features §3.3*
+- [ ] 4.5 **Definition Change Handler** — UUID Validation bei BlockEdit Exit, Stale UUIDs prunen — 2h
+- [ ] 4.6 **Mixed State für Component-Ebene** — Parent ◐ wenn Komponenten teilweise hidden — 1h — Abhängig von: 4.1
+- [ ] 4.7 **Performance Test** — 100+ managed Instances, >30fps bei Rotation — 3h — Abhängig von: 4.3
+- [ ] 4.8 **Edge Case Tests** — Copy/Paste, Undo/Redo, Linked Blocks, Nested Blocks — 3h
+- [ ] 4.9 **Yak Package v2.0** — Bundle beide .rhp Files — 1h — Abhängig von: 4.7
+
+**Sprint 4 Deliverable:** v2.0 — Per-Instance Component Visibility produktionsreif.
+
+---
+
+## Sprint 5: Quick Wins & UX Polish
+
+**Dauer:** 2 Wochen | **Status:** ⏳ | **Effort:** ~21h
+
+*Quelle: Think Tank Features §2 + §4 P0/P1*
+
+### Multi-Select (Critical Gap #1)
+- [ ] 5.1 **Multi-Select aktivieren** — `AllowMultipleSelection = true`, Event Handler auf `SelectedItems` anpassen — 4h — *Quelle: SW Comparison §4 Critical*
+- [ ] 5.2 **Batch-Operationen** — Hide/Show/Isolate auf Mehrfachauswahl — 2h — Abhängig von: 5.1
+
+### UX Quick Wins
+- [ ] 5.3 **Hover Highlight** (Tree → Viewport Preview) — 3h — *Quelle: Think Tank §1.2 #9*
+- [ ] 5.4 **Breadcrumb Navigation** im Assembly Mode — 3h — *Quelle: SW Comparison §4 Important*
+- [ ] 5.5 **"Show Hidden" Mode** — invertierte Ansicht, alle Hidden transparent zeigen — 3h — *Quelle: Think Tank §1.1 #5*
+- [ ] 5.6 **Inline Rename** (F2 → InputBox Dialog) — 2h — *Quelle: Think Tank §2.5*
+- [ ] 5.7 **Ctrl+A Select All** im Tree — 30min — *Quelle: Think Tank §2.2*
+- [ ] 5.8 **Tab/Shift+Tab** Viewport-Hover Hide/Show (SolidWorks Pattern) — 2h — *Quelle: Think Tank §1.1 #3*
+- [ ] 5.9 **Select All Same Definition** Context Menu — 1h — *Quelle: Think Tank §4 P1*
+
+**Sprint 5 Deliverable:** v2.1 — Spürbar bessere UX.
+
+---
+
+## Sprint 6: SolidWorks Parity — Critical Gaps
+
+**Dauer:** 4 Wochen | **Status:** ⏳ | **Effort:** ~40-50h
+
+*Quelle: SW Comparison §4 Critical Gaps*
+
+### BOM-Export (Critical Gap #2)
+- [ ] 6.1 **BOM Data Model** — Instance Counts, Definition Names, UserText Properties sammeln — 4h
+- [ ] 6.2 **CSV Export** — Stückliste als CSV mit konfigurierbaren Spalten — 4h — Abhängig von: 6.1
+- [ ] 6.3 **Excel Export** (optional, via EPPlus oder ClosedXML) — 3h — Abhängig von: 6.1
+
+### Display States (Critical Gap #3)
+- [ ] 6.4 **DisplayStateManager** — Named Visibility Presets speichern/laden — 8h — *Quelle: Think Tank §1.1 #1, SW Comparison §2.2*
+- [ ] 6.5 **Display State Dropdown** — UI zum Wechseln zwischen States — 3h — Abhängig von: 6.4
+- [ ] 6.6 **Persistence** — Display States in .3dm (UserDictionary oder UserData) — 4h — Abhängig von: 6.4
+- [ ] 6.7 **Ctrl+1-9 Quick Switch** — Keyboard Shortcuts für erste 9 States — 1h — Abhängig von: 6.5
+
+### Suppress/Unsuppress
+- [ ] 6.8 **Suppress in UI** — ComponentState.Suppressed über Context Menu — 3h — *C++ Infrastruktur existiert bereits (ComponentState enum)*
+- [ ] 6.9 **Suppressed Styling** — eigenes Icon, aus BBox/BOM ausgeschlossen — 2h — Abhängig von: 6.8
+
+### Erweiterte Context Menüs
+- [ ] 6.10 **Go to Definition** — Spring zur Block-Definition — 1h — *Quelle: SW Comparison §4 Important*
+- [ ] 6.11 **Replace Component** — Block-Instanz durch andere Definition ersetzen — 3h
+- [ ] 6.12 **Properties Dialog** — erweiterte Eigenschaften editieren — 3h
+
+**Sprint 6 Deliverable:** v3.0 — Professionelles Assembly-Management-Tool.
+
+---
+
+## Sprint 7+: Beyond SolidWorks
+
+**Dauer:** 8-12 Wochen | **Status:** ⏳ | **Effort:** ~80-120h
+
+*Quelle: Think Tank §4 P2 + SW Comparison §5 Phase 2*
+
+### Grasshopper Integration (Rhino-Unique USP)
+- [ ] 7.1 **GH Assembly Data Component** — Assembly-Daten als Data Tree — 2 Wochen
+- [ ] 7.2 **GH Visibility Control** — Programmatische Visibility-Steuerung — 1 Woche
+
+### Visual Enhancements
+- [ ] 7.3 **Ghost Mode** — Hidden = semi-transparent statt unsichtbar — 15h — *Quelle: Think Tank §4 P2*
+- [ ] 7.4 **Per-Instance Color Overrides** — Instanz einfärben (z.B. rot = nacharbeiten) — 10h — *C++ Infrastruktur nötig*
+- [ ] 7.5 **Per-Component Transparency** — Gehäuse transparent, Innenleben sichtbar — 8h — *C++ Infrastruktur existiert teilweise*
+- [ ] 7.6 **Assembly Visualization** — Farbcodierung nach Property (Material, Gewicht) — 15h — *Quelle: SW Comparison §3*
+
+### Performance & Skalierung
+- [ ] 7.7 **Lazy Loading** für Tree — Children erst bei Expand laden — 5h — *Quelle: Think Tank §3.1*
+- [ ] 7.8 **Inkrementelle Tree Updates** — kein Full Rebuild bei Add/Delete — 8h — *Quelle: Think Tank §3.1*
+- [ ] 7.9 **Virtualisierter Tree** (WebView) für 10K+ Instanzen — 2 Wochen — *Quelle: Think Tank §4 P2*
+
+### Weitere Features
+- [ ] 7.10 **Smart Groups** — virtuelle Gruppierungen via Queries ("alle M8 Schrauben") — 2 Wochen
+- [ ] 7.11 **Layer-Assembly Sync** — Auto Layer-Struktur aus Assembly-Hierarchie — 1 Woche
+- [ ] 7.12 **Assembly Templates** — Strukturen als Templates speichern/laden — 1 Woche
+- [ ] 7.13 **Undo für Visibility** — Rhino Undo Integration + C++ Custom Undo Records — 15h
+
+---
+
+## Backlog (priorisiert)
+
+*Features ohne festen Sprint, nach Priorität sortiert.*
+
+| Prio | Feature | Aufwand | Quelle |
+|------|---------|---------|--------|
+| P1 | XML Docs für Commands + DetailPanel + IAssemblyNode | 3h | Doc Audit §5 |
+| P1 | `volatile`/`Interlocked` auf `_needsRefresh` | 30min | Think Tank §3.3 |
+| P1 | Static `_service` in TestCommand entfernen (Prod) | 15min | Think Tank §3.2 |
+| P2 | Tree Display Options (Flat Tree, Feature Names) | 4h | SW Comparison §4 |
+| P2 | Component Preview Window | 8h | SW Comparison §4 |
+| P2 | Edit-in-Context Transparency | 4h | Think Tank §1.1 #8 |
+| P2 | Detail Panel erweitern (Masse, Material, Custom Props) | 8h | SW Comparison §2.6 |
+| P3 | Block Library Browser | 2 Wochen | Think Tank §4 P2 |
+| P3 | Assembly Comparison (Diff) | 2 Wochen | Think Tank §4 P2 |
+| P3 | Multi-Document / Worksession Support | 2 Wochen | Think Tank §4 P2 |
+| P3 | Exploded Views | 6-8 Wochen | SW Comparison §4 |
+| P3 | Interference Detection | 6-8 Wochen | SW Comparison §4 |
+| P3 | food4Rhino Listing + Marketing | 4h | Think Tank §5 |
+| P3 | README Badges (Build, Yak Version) | 1h | Doc Audit §7 |
+
+---
+
+## Quellen-Referenz
+
+| Kürzel | Dokument |
+|--------|----------|
+| Doc Audit | `docs/reports/documentation-audit.md` |
+| Think Tank | `docs/reports/thinktank-features.md` |
+| SW Comparison | `docs/reports/solidworks-comparison.md` |
+| Review | `docs/plans/REVIEW_SPRINT1.md` |
+| ADR-002 | `docs/plans/ADR/ADR-002-*` |
+| Refactoring | `docs/plans/REFACTORING_CHECKLIST.md` |
+
+---
+
+*Realistisch geplant für Abende/Wochenenden + Agent-Nächte. Priorität: USP (Per-Instance Visibility) vor Parity (BOM/Display States) vor Beyond (Grasshopper).*
