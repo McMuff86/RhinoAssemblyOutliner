@@ -17,6 +17,7 @@ public class AssemblyTreeView : TreeGridView
     private DocumentNode _rootNode;
     private Dictionary<Guid, AssemblyTreeItem> _itemLookup;
     private string _filterText;
+    private Font _hiddenFont;
 
     /// <summary>
     /// Raised when selection changes.
@@ -652,15 +653,30 @@ public class AssemblyTreeView : TreeGridView
         var item = e.Item as AssemblyTreeItem;
         if (item == null) return;
 
-        // Gray out and italicize hidden nodes
+        // Gray out and italicize hidden nodes (font cached to avoid per-cell allocation)
         if (!item.Node.IsVisible)
         {
             e.ForegroundColor = Eto.Drawing.Colors.Gray;
-            e.Font = new Font(e.Font.Family, e.Font.Size, FontStyle.Italic);
+            if (_hiddenFont == null || _hiddenFont.Family != e.Font.Family || _hiddenFont.Size != e.Font.Size)
+            {
+                _hiddenFont?.Dispose();
+                _hiddenFont = new Font(e.Font.Family, e.Font.Size, FontStyle.Italic);
+            }
+            e.Font = _hiddenFont;
         }
     }
 
     #endregion
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _hiddenFont?.Dispose();
+            _hiddenFont = null;
+        }
+        base.Dispose(disposing);
+    }
 }
 
 /// <summary>
