@@ -1,197 +1,111 @@
-# Rhino Assembly Outliner
+# RhinoAssemblyOutliner
 
-[![Rhino 8](https://img.shields.io/badge/Rhino-8-blue?logo=rhinoceros)](https://www.rhino3d.com/)
-[![.NET 7.0+](https://img.shields.io/badge/.NET-7.0+-purple?logo=dotnet)](https://dotnet.microsoft.com/)
-[![C++17](https://img.shields.io/badge/C++-17-orange?logo=cplusplus)](https://isocpp.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
+**SolidWorks-style Assembly Outliner for Rhino 8**
 
-A SolidWorks FeatureManager-style **Assembly Outliner** for Rhino 8 that displays block hierarchies, nesting, and component status in a persistent, dockable tree structure.
+A dockable panel plugin that brings hierarchical block instance management to Rhino 8 — inspired by the SolidWorks FeatureManager Design Tree. Navigate, control visibility, and organize complex block assemblies with ease.
 
-**Hybrid C++/C# Architecture** for native performance and modern UI.
+> Screenshots coming soon
 
 ---
 
-## 🎯 The Problem
+## Features
 
-Rhino's built-in Block Manager shows a **flat list of block definitions** — not the actual instance hierarchy in your document. This makes navigating complex assemblies difficult.
+### 🌳 Hierarchical Tree View
+Recursive visualization of block instances with expand/collapse, showing the full nesting hierarchy of your assembly. Linked (🔗), embedded (📦), and linked+embedded (📎) blocks are distinguished by icon.
 
-**What's missing:**
-- No hierarchical instance tree
-- No parent → child context
-- Limited bidirectional selection
-- **No per-instance component visibility** ← Game-changer!
-- No BOM export from structure
+### 👁️ Visibility Control
+Toggle visibility per instance with the eye icon column. Supports **Show/Hide with Dependents** for recursive operations on entire sub-trees. Parent nodes display a mixed-state icon (◐) when some children are hidden.
 
-## ✨ The Solution
+### 🔍 Isolate Mode
+Isolate one or more instances to focus your work. A banner shows "Isolate Mode — N of M visible" with a quick exit button. All other objects are temporarily hidden.
 
-Assembly Outliner provides the **missing hierarchical instance tree** that shows your actual document structure:
+### 🏗️ Assembly Mode
+Set any block instance as the **Assembly Root** to focus the tree on a single sub-assembly. Switch between Document Mode and Assembly Mode via the toolbar dropdown.
 
-```
-📄 Kitchen_Assembly.3dm
-├─ 📦 UpperCabinet_600 #1     👁 Layer: Furniture::Upper
-│   ├─ 📦 Hinge_Blum_110 #1   👁
-│   ├─ 📦 Hinge_Blum_110 #2   👁
-│   └─ ⬡ SidePanel_L          👁
-├─ 📦 UpperCabinet_600 #2     👁
-├─ 📦 LowerCabinet_600 #1     👁
-│   ├─ 📦 Drawer_500 #1       👁
-│   └─ 📦 Drawer_500 #2       👁
-└─ 📦 Countertop_L #1         👁
-```
+### 🔗 Bidirectional Selection Sync
+Click a node in the tree to select it in the viewport — or select in the viewport and the tree follows. Debounced for smooth interaction.
+
+### 📋 Detail Panel
+View selected item properties including definition name, instance number, layer, link type, and user attributes (UserText key-value pairs).
+
+### 🔎 Search & Filter
+Filter the tree by object or definition name with case-insensitive search.
+
+### ↕️ Drag & Drop Reorder
+Reorder items within the tree via drag and drop (within the outliner panel).
 
 ---
 
-## 📋 Features
+## Keyboard Shortcuts
 
-### Navigation & Visualization
-- 🌳 **Hierarchical Tree** — Recursive block instance visualization
-- 🔢 **Instance Count** — See how many of each definition exist
-- 📍 **Layer Display** — Layer assignment per instance
-- 🔗 **Link Type** — Embedded, Linked, or EmbeddedAndLinked
-
-### Interaction
-- 🔄 **Bidirectional Selection** — Click in tree ↔ select in viewport
-- 👁 **Visibility Toggle** — Show/Hide/Isolate per entry
-- 🔍 **Search & Filter** — Find components quickly
-- 📋 **Context Menu** — Select all same, edit block, zoom to
-- 🏗️ **Assembly Mode** — Focus on a single sub-assembly root
-
-### ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| **H** | Hide selected |
-| **S** | Show selected |
-| **I** | Isolate selected |
-| **Space** | Show All (reset visibility) |
-| **F** | Zoom to / Frame selected |
-| **Del** | Delete selected |
-| **Enter** | Edit block (BlockEdit) |
-| **F5** | Refresh tree |
-| **Ctrl+F** | Focus search bar |
-| **Esc** | Clear search / exit isolate |
-
-### 🆕 Per-Instance Component Visibility (v2.0)
-
-**The killer feature Rhino doesn't have!**
-
-Hide individual components within a single block instance — without affecting other instances of the same definition:
-
-```
-📦 Cabinet_600 #1     👁️ (all visible)
-│   ├─ ⬡ Korpus       👁️
-│   ├─ ⬡ Tür          〰️ ← HIDDEN only in this instance
-│   └─ ⬡ Rückwand     👁️
-
-📦 Cabinet_600 #2     👁️ (all visible)
-│   ├─ ⬡ Korpus       👁️
-│   ├─ ⬡ Tür          👁️ ← Still visible here!
-│   └─ ⬡ Rückwand     👁️
-```
-
-Achieved through a **native C++ DisplayConduit** that intercepts Rhino's rendering pipeline. See [Architecture](#architecture).
+| Key | Action |
+|-------|--------------------------------------|
+| `H` | Hide selected instance(s) |
+| `S` | Show selected instance(s) |
+| `I` | Isolate selected instance(s) |
+| `Space` | Show All (reset visibility) |
+| `F` | Zoom to selected instance |
+| `Del` | Delete selected instance |
+| `Enter` | BlockEdit selected instance |
 
 ---
 
-## 📦 Installation
+## Installation
 
-### Requirements
-- **Rhino 8** (Windows or macOS)
-- **.NET 7.0+** (included with Rhino 8)
+### Yak Package Manager (coming soon)
 
-### Via Package Manager
-*Coming soon — will be available on Rhino Package Manager*
+```
+_PackageManager
+```
 
-### Manual Installation
-1. Download the latest `.rhp` from [Releases](https://github.com/your-org/RhinoAssemblyOutliner/releases)
-2. In Rhino, run `PlugInManager`
-3. Click **Install...** and select the downloaded file
+Search for **RhinoAssemblyOutliner** and install.
+
+### Manual Install
+
+1. Download the latest `.rhp` file from [Releases](https://github.com/your-username/RhinoAssemblyOutliner/releases)
+2. In Rhino 8, run `_PlugInManager`
+3. Click **Install…** and select the `.rhp` file
 4. Restart Rhino
+5. Run `OpenOutliner` to open the panel
 
 ---
 
-## 🚀 Quick Start
+## Requirements
 
-1. Open a Rhino document with block instances
-2. Run command: `AssemblyOutliner`
-3. Dock the panel where convenient
-4. Click any node to select in viewport
-5. Use **H** / **S** / **I** / **Space** for visibility control
-
-For detailed usage, see the [User Guide](docs/USER_GUIDE.md).
+- **Rhino 8** (Windows)
+- **.NET 7** runtime (ships with Rhino 8)
 
 ---
 
-## 🏗️ Architecture
+## Usage
 
-**Hybrid C++/C# Plugin** — best of both worlds:
-
-| Component | Language | Purpose |
-|-----------|----------|---------|
-| **DisplayConduit** | C++ | Intercept rendering, custom component visibility |
-| **UserData** | C++ | Persist visibility state to .3dm file |
-| **UI (Eto.Forms)** | C# | Modern, responsive tree interface |
-| **Commands** | C# | Rhino command integration |
-| **Services** | C# | Business logic, event handling |
-
-For the full architecture with data flow diagrams, state management, and P/Invoke API surface, see **[ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md)**.
-
-Design decisions are documented in **[ADRs](docs/plans/ADR/)**.
+1. Run `OpenOutliner` in the Rhino command line
+2. The Assembly Outliner panel opens as a dockable side panel
+3. Your document's block hierarchy is displayed automatically
+4. Right-click any node for context menu actions (Select, Zoom To, Isolate, Hide, Edit Block, Properties)
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-| Version | Status | Focus |
-|---------|--------|-------|
-| **v0.1.0** | ✅ Done | Core outliner: tree, selection sync, visibility, search, assembly mode |
-| **v0.2.0** | 🔄 In Progress | UX polish: keyboard shortcuts, grayed hidden items, isolate flow, status bar |
-| **v1.0.0** | 📋 Planned | Stable release: bug fixes, tests, Yak package, documentation |
-| **v2.0.0** | 📋 Planned | Per-instance component visibility via C++ DisplayConduit |
+### v1.0 — Current
+- Full assembly tree with visibility control, isolate mode, keyboard shortcuts, assembly mode, search, detail panel, and selection sync.
 
-See [SPRINT_PLAN.md](docs/plans/SPRINT_PLAN.md) for detailed sprint breakdown.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! See the [Contributing Guide](docs/CONTRIBUTING.md) for:
-
-- How to build from source
-- Project structure
-- Coding conventions & commit format
-- Testing instructions
+### v2.0 — Per-Instance Component Visibility
+- **C++ DisplayConduit** intercepting `SC_DRAWOBJECT` for per-component draw control
+- Hide individual components within a single block instance (not all instances of that definition)
+- `ON_UserData` persistence — hidden component state saved in `.3dm` files
+- P/Invoke bridge between C# plugin and native C++ conduit
+- Performance target: >30 fps with 100+ managed instances
 
 ---
 
-## 📖 Documentation
+## License
 
-| Document | Description |
-|----------|-------------|
-| [User Guide](docs/USER_GUIDE.md) | End-user documentation |
-| [Architecture V2](docs/ARCHITECTURE_V2.md) | Technical architecture (hybrid C++/C#) |
-| [Sprint Plan](docs/plans/SPRINT_PLAN.md) | Development roadmap |
-| [Contributing](docs/CONTRIBUTING.md) | Development guide |
-| [Changelog](CHANGELOG.md) | Version history |
-| [ADRs](docs/plans/ADR/) | Architecture Decision Records |
+[MIT](LICENSE) © Adrian Muff
 
 ---
 
-## 📄 License
+## Contributing
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgments
-
-- Inspired by SolidWorks FeatureManager
-- Built with [RhinoCommon](https://developer.rhino3d.com/)
-- UI powered by [Eto.Forms](https://github.com/picoe/Eto)
-
----
-
-<p align="center">
-  Made with ❤️ for the Rhino community
-</p>
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
