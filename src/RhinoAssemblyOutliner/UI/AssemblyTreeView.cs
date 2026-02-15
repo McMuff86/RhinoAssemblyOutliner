@@ -135,6 +135,7 @@ public class AssemblyTreeView : TreeGridView
         Activated += OnActivated;
         CellFormatting += OnCellFormatting;
         CellClick += OnCellClick;
+        CellDoubleClick += OnCellDoubleClick;
         
         // Context menu
         ContextMenu = BuildContextMenu();
@@ -274,15 +275,87 @@ public class AssemblyTreeView : TreeGridView
     }
 
     /// <summary>
-    /// Updates the visibility icon for a tree item.
+    /// Handles double-click to enter BlockEdit on block instance nodes.
+    /// </summary>
+    private void OnCellDoubleClick(object sender, GridCellMouseEventArgs e)
+    {
+        var item = e.Item as AssemblyTreeItem;
+        if (item?.Node is BlockInstanceNode bn && bn.InstanceId != Guid.Empty)
+        {
+            var doc = GetDoc();
+            if (doc != null)
+            {
+                doc.Objects.UnselectAll();
+                doc.Objects.Select(bn.InstanceId, true);
+                doc.Views.Redraw();
+            }
+            RhinoApp.RunScript("_-BlockEdit", false);
+        }
+    }
+
+    /// <summary>
+    /// Determines the visibility state of a node considering its children.
+    /// Returns: "👁" (all visible), "◯" (all hidden), or "◐" (mixed).
+    /// </summary>
+    private string GetVisibilityIcon(AssemblyNode node)
+    {
+        if (node is DocumentNode) return "";
+        
+        if (node.Children.Count == 0)
+            return node.IsVisible ? "👁" : "◯";
+
+        bool anyVisible = false;
+        bool anyHidden = false;
+        CheckChildrenVisibility(node, ref anyVisible, ref anyHidden);
+
+        if (anyVisible && anyHidden)
+            return "◐";
+        return node.IsVisible ? "👁" : "◯";
+    }
+
+    /// <summary>
+    /// Recursively checks whether descendants include both visible and hidden nodes.
+    /// </summary>
+    private void CheckChildrenVisibility(AssemblyNode node, ref bool anyVisible, ref bool anyHidden)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.IsVisible)
+                anyVisible = true;
+            else
+                anyHidden = true;
+
+            if (anyVisible && anyHidden) return; // Early exit
+
+            if (child.Children.Count > 0)
+                CheckChildrenVisibility(child, ref anyVisible, ref anyHidden);
+
+            if (anyVisible && anyHidden) return;
+        }
+    }
+
+    /// <summary>
+    /// Updates the visibility icon for a tree item and its ancestors.
     /// </summary>
     private void UpdateVisibilityIcon(AssemblyTreeItem item)
     {
         if (item.Values is object[] values && values.Length > 0)
         {
-            values[0] = item.Node.IsVisible ? "👁" : "◯";
+            values[0] = GetVisibilityIcon(item.Node);
         }
         ReloadItem(item);
+
+        // Update parent icons (mixed state may have changed)
+        var parent = item.Parent as AssemblyTreeItem;
+        while (parent != null)
+        {
+            if (parent.Values is object[] parentValues && parentValues.Length > 0)
+            {
+                parentValues[0] = GetVisibilityIcon(parent.Node);
+            }
+            ReloadItem(parent);
+            parent = parent.Parent as AssemblyTreeItem;
+        }
     }
 
     /// <summary>
@@ -292,22 +365,26 @@ public class AssemblyTreeView : TreeGridView
     {
         var menu = new ContextMenu();
 
-        var selectItem = new ButtonMenuItem { Text = "Select in Viewport" };
-        selectItem.Click += (s, e) => SelectCurrentInViewport();
-
-        var selectAllItem = new ButtonMenuItem { Text = "Select All Instances" };
-        selectAllItem.Click += (s, e) => SelectAllInstances();
-
-        var zoomItem = new ButtonMenuItem { Text = "Zoom To\tF" };
-        zoomItem.Click += (s, e) => ZoomToSelected();
-
-        var separator1 = new SeparatorMenuItem();
-
+        // === Visibility Section ===
         var hideItem = new ButtonMenuItem { Text = "Hide\tH" };
         hideItem.Click += (s, e) => OnHideClicked();
 
         var showItem = new ButtonMenuItem { Text = "Show\tS" };
         showItem.Click += (s, e) => OnShowClicked();
+
+        var hideWithChildrenItem = new ButtonMenuItem { Text = "Hide with Dependents" };
+        hideWithChildrenItem.Click += (s, e) =>
+        {
+            var n = (SelectedItem as AssemblyTreeItem)?.Node;
+            if (n != null) HideWithChildrenRequested?.Invoke(this, n);
+        };
+
+        var showWithChildrenItem = new ButtonMenuItem { Text = "Show with Dependents" };
+        showWithChildrenItem.Click += (s, e) =>
+        {
+            var n = (SelectedItem as AssemblyTreeItem)?.Node;
+            if (n != null) ShowWithChildrenRequested?.Invoke(this, n);
+        };
 
         var isolateItem = new ButtonMenuItem { Text = "Isolate\tI" };
         isolateItem.Click += (s, e) => OnIsolateClicked();
@@ -315,48 +392,50 @@ public class AssemblyTreeView : TreeGridView
         var showAllItem = new ButtonMenuItem { Text = "Show All\tCtrl+Shift+H" };
         showAllItem.Click += (s, e) => ShowAllRequested?.Invoke(this, EventArgs.Empty);
 
-        var hideWithChildrenItem = new ButtonMenuItem { Text = "👁‍🗨 Hide with Children" };
-        hideWithChildrenItem.Click += (s, e) =>
-        {
-            var n = (SelectedItem as AssemblyTreeItem)?.Node;
-            if (n != null) HideWithChildrenRequested?.Invoke(this, n);
-        };
-
-        var showWithChildrenItem = new ButtonMenuItem { Text = "👁 Show with Children" };
-        showWithChildrenItem.Click += (s, e) =>
-        {
-            var n = (SelectedItem as AssemblyTreeItem)?.Node;
-            if (n != null) ShowWithChildrenRequested?.Invoke(this, n);
-        };
-
-        var separator2 = new SeparatorMenuItem();
-        
-        var setAsRootItem = new ButtonMenuItem { Text = "📌 Set as Assembly Root" };
-        setAsRootItem.Click += (s, e) => OnSetAsAssemblyRootClicked();
-
-        var separator3 = new SeparatorMenuItem();
-
-        var expandItem = new ButtonMenuItem { Text = "Expand Children" };
-        expandItem.Click += (s, e) => ExpandSelected();
-
-        var collapseItem = new ButtonMenuItem { Text = "Collapse Children" };
-        collapseItem.Click += (s, e) => CollapseSelected();
-
-        menu.Items.Add(selectItem);
-        menu.Items.Add(selectAllItem);
-        menu.Items.Add(zoomItem);
-        menu.Items.Add(separator1);
         menu.Items.Add(hideItem);
         menu.Items.Add(showItem);
-        menu.Items.Add(isolateItem);
-        menu.Items.Add(showAllItem);
         menu.Items.Add(hideWithChildrenItem);
         menu.Items.Add(showWithChildrenItem);
-        menu.Items.Add(separator2);
+        menu.Items.Add(isolateItem);
+        menu.Items.Add(showAllItem);
+
+        // === Navigation Section ===
+        menu.Items.Add(new SeparatorMenuItem());
+
+        var zoomItem = new ButtonMenuItem { Text = "Zoom To\tF" };
+        zoomItem.Click += (s, e) => ZoomToSelected();
+
+        var selectItem = new ButtonMenuItem { Text = "Select in Viewport" };
+        selectItem.Click += (s, e) => SelectCurrentInViewport();
+
+        menu.Items.Add(zoomItem);
+        menu.Items.Add(selectItem);
+
+        // === Editing Section ===
+        menu.Items.Add(new SeparatorMenuItem());
+
+        var blockEditItem = new ButtonMenuItem { Text = "BlockEdit\tEnter" };
+        blockEditItem.Click += (s, e) =>
+        {
+            var item = SelectedItem as AssemblyTreeItem;
+            if (item?.Node is BlockInstanceNode bn && bn.InstanceId != Guid.Empty)
+            {
+                var doc = GetDoc();
+                if (doc != null)
+                {
+                    doc.Objects.UnselectAll();
+                    doc.Objects.Select(bn.InstanceId, true);
+                    doc.Views.Redraw();
+                }
+                RhinoApp.RunScript("_-BlockEdit", false);
+            }
+        };
+
+        var setAsRootItem = new ButtonMenuItem { Text = "Set as Assembly Root" };
+        setAsRootItem.Click += (s, e) => OnSetAsAssemblyRootClicked();
+
+        menu.Items.Add(blockEditItem);
         menu.Items.Add(setAsRootItem);
-        menu.Items.Add(separator3);
-        menu.Items.Add(expandItem);
-        menu.Items.Add(collapseItem);
 
         return menu;
     }
@@ -827,7 +906,7 @@ public class AssemblyTreeItem : TreeGridItem
         Node = node;
 
         // Set values for columns
-        string visibilityIcon = node.IsVisible ? "👁" : "◯";
+        string visibilityIcon = GetInitialVisibilityIcon(node);
         string typeIcon = "";
         string layerName = "";
         string typeName = "";
@@ -845,7 +924,7 @@ public class AssemblyTreeItem : TreeGridItem
                 _ => "📦"  // Embedded (default)
             };
         }
-        else if (node is DocumentNode docNode)
+        else if (node is DocumentNode)
         {
             typeName = "Document";
             typeIcon = "📄";
@@ -877,5 +956,35 @@ public class AssemblyTreeItem : TreeGridItem
         }
 
         Expanded = false;
+    }
+
+    /// <summary>
+    /// Determines the initial visibility icon for a node, including mixed state for parents.
+    /// </summary>
+    private static string GetInitialVisibilityIcon(AssemblyNode node)
+    {
+        if (node is DocumentNode) return "";
+        if (node.Children.Count == 0)
+            return node.IsVisible ? "👁" : "◯";
+
+        bool anyVisible = false;
+        bool anyHidden = false;
+        CheckVisibilityRecursive(node, ref anyVisible, ref anyHidden);
+
+        if (anyVisible && anyHidden) return "◐";
+        return node.IsVisible ? "👁" : "◯";
+    }
+
+    private static void CheckVisibilityRecursive(AssemblyNode node, ref bool anyVisible, ref bool anyHidden)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.IsVisible) anyVisible = true;
+            else anyHidden = true;
+            if (anyVisible && anyHidden) return;
+            if (child.Children.Count > 0)
+                CheckVisibilityRecursive(child, ref anyVisible, ref anyHidden);
+            if (anyVisible && anyHidden) return;
+        }
     }
 }
