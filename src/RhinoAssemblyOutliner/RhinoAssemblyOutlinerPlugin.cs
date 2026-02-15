@@ -73,6 +73,11 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     /// </summary>
     protected override void OnUnloadPlugIn()
     {
+        // Unsubscribe all event handlers to prevent event leaks on static events
+        RhinoDoc.BeginOpenDocument -= OnBeginOpenDocument;
+        RhinoDoc.EndOpenDocument -= OnEndOpenDocument;
+        RhinoDoc.CloseDocument -= OnCloseDocument;
+
         // Clean up native DLL resources (conduit, vis data, event handler)
         if (NativeVisibilityInterop.IsNativeDllAvailable())
         {
