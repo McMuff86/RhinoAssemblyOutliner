@@ -10,27 +10,37 @@ namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 /// Service for managing per-instance component visibility.
 /// This is the main API for hiding/showing components within specific block instances.
 /// 
-/// Strategy v2: Objects stay visible and selectable. The DisplayConduit intercepts
-/// their drawing and renders only visible components.
+/// All rendering is handled by the C++ native conduit (CVisibilityConduit).
+/// This service acts as orchestrator: state management, UserData, and P/Invoke calls.
+/// If the native DLL is unavailable, the feature is gracefully disabled.
 /// </summary>
 public class PerInstanceVisibilityService : IDisposable
 {
     private readonly RhinoDoc _doc;
-    private readonly PerInstanceVisibilityConduit _conduit;
+    private readonly bool _nativeAvailable;
     private bool _disposed;
 
     public PerInstanceVisibilityService(RhinoDoc doc)
     {
         _doc = doc ?? throw new ArgumentNullException(nameof(doc));
-        _conduit = new PerInstanceVisibilityConduit(doc);
-        
-        // Enable the conduit
-        _conduit.Enabled = true;
+
+        // Try to initialize the native conduit
+        _nativeAvailable = TryInitNative();
+
+        if (!_nativeAvailable)
+        {
+            RhinoApp.WriteLine("WARNING: Native visibility DLL not available. Per-instance visibility feature is disabled.");
+        }
 
         // Subscribe to document events
         RhinoDoc.CloseDocument += OnDocumentClose;
         RhinoDoc.BeginOpenDocument += OnBeginOpenDocument;
     }
+
+    /// <summary>
+    /// Whether the native visibility system is available and active.
+    /// </summary>
+    public bool IsNativeAvailable => _nativeAvailable;
 
     /// <summary>
     /// Hide a specific component within a specific block instance.
@@ -56,21 +66,17 @@ public class PerInstanceVisibilityService : IDisposable
     /// <returns>New visibility state (true = visible)</returns>
     public bool ToggleComponent(Guid instanceId, int componentIndex)
     {
+        if (!_nativeAvailable) return true;
+
         var instanceObj = _doc.Objects.FindId(instanceId) as InstanceObject;
         if (instanceObj == null) return true;
 
         var visData = GetOrCreateVisibilityData(instanceObj);
         bool newState = visData.ToggleComponentVisibility(componentIndex);
 
-        // Update conduit management
-        if (visData.HasHiddenComponents)
-        {
-            _conduit.RegisterManagedInstance(instanceId);
-        }
-        else
-        {
-            _conduit.UnregisterManagedInstance(instanceId);
-        }
+        // Sync to native conduit
+        string path = componentIndex.ToString();
+        NativeVisibilityInterop.SetComponentVisibility(ref instanceId, path, newState);
 
         _doc.Views.Redraw();
         return newState;
@@ -81,21 +87,17 @@ public class PerInstanceVisibilityService : IDisposable
     /// </summary>
     public void SetComponentVisibility(Guid instanceId, int componentIndex, bool visible)
     {
+        if (!_nativeAvailable) return;
+
         var instanceObj = _doc.Objects.FindId(instanceId) as InstanceObject;
         if (instanceObj == null) return;
 
         var visData = GetOrCreateVisibilityData(instanceObj);
         visData.SetComponentVisibility(componentIndex, visible);
 
-        // Update conduit management
-        if (visData.HasHiddenComponents)
-        {
-            _conduit.RegisterManagedInstance(instanceId);
-        }
-        else
-        {
-            _conduit.UnregisterManagedInstance(instanceId);
-        }
+        // Sync to native conduit
+        string path = componentIndex.ToString();
+        NativeVisibilityInterop.SetComponentVisibility(ref instanceId, path, visible);
 
         _doc.Views.Redraw();
     }
@@ -105,6 +107,8 @@ public class PerInstanceVisibilityService : IDisposable
     /// </summary>
     public bool IsComponentVisible(Guid instanceId, int componentIndex)
     {
+        if (!_nativeAvailable) return true;
+
         var instanceObj = _doc.Objects.FindId(instanceId) as InstanceObject;
         if (instanceObj == null) return true;
 
@@ -144,7 +148,12 @@ public class PerInstanceVisibilityService : IDisposable
             visData.ShowAllComponents();
         }
 
-        _conduit.UnregisterManagedInstance(instanceId);
+        // Reset in native conduit
+        if (_nativeAvailable)
+        {
+            NativeVisibilityInterop.ResetComponentVisibility(ref instanceId);
+        }
+
         _doc.Views.Redraw();
     }
 
@@ -153,6 +162,8 @@ public class PerInstanceVisibilityService : IDisposable
     /// </summary>
     public void HideAllComponents(Guid instanceId)
     {
+        if (!_nativeAvailable) return;
+
         var instanceObj = _doc.Objects.FindId(instanceId) as InstanceObject;
         if (instanceObj == null) return;
 
@@ -160,9 +171,16 @@ public class PerInstanceVisibilityService : IDisposable
         if (instanceDef == null) return;
 
         var visData = GetOrCreateVisibilityData(instanceObj);
-        visData.HideAllComponents(instanceDef.GetObjects().Length);
+        var defObjects = instanceDef.GetObjects();
+        visData.HideAllComponents(defObjects.Length);
 
-        _conduit.RegisterManagedInstance(instanceId);
+        // Sync all to native conduit
+        for (int i = 0; i < defObjects.Length; i++)
+        {
+            string path = i.ToString();
+            NativeVisibilityInterop.SetComponentVisibility(ref instanceId, path, false);
+        }
+
         _doc.Views.Redraw();
     }
 
@@ -201,9 +219,12 @@ public class PerInstanceVisibilityService : IDisposable
 
     /// <summary>
     /// Refresh after document changes (e.g., definition edited).
+    /// Resyncs all UserData-based visibility state to the native conduit.
     /// </summary>
     public void RefreshAll()
     {
+        if (!_nativeAvailable) return;
+
         // Re-evaluate all instances with visibility data
         foreach (var obj in _doc.Objects.GetObjectList(ObjectType.InstanceReference))
         {
@@ -214,7 +235,13 @@ public class PerInstanceVisibilityService : IDisposable
                 
                 if (visData != null && visData.HasHiddenComponents)
                 {
-                    _conduit.RegisterManagedInstance(instanceObj.Id);
+                    // Sync hidden components to native
+                    var instanceId = instanceObj.Id;
+                    foreach (int idx in visData.HiddenComponents)
+                    {
+                        string path = idx.ToString();
+                        NativeVisibilityInterop.SetComponentVisibility(ref instanceId, path, false);
+                    }
                 }
             }
         }
@@ -223,6 +250,32 @@ public class PerInstanceVisibilityService : IDisposable
     }
 
     #region Private Helpers
+
+    private bool TryInitNative()
+    {
+        try
+        {
+            if (!NativeVisibilityInterop.IsNativeDllAvailable())
+                return false;
+
+            return NativeVisibilityInterop.NativeInit();
+        }
+        catch (DllNotFoundException ex)
+        {
+            RhinoApp.WriteLine($"WARNING: Native visibility DLL load failed: {ex.Message}");
+            return false;
+        }
+        catch (EntryPointNotFoundException ex)
+        {
+            RhinoApp.WriteLine($"WARNING: Native visibility DLL entry point missing: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"WARNING: Native visibility init failed: {ex.Message}");
+            return false;
+        }
+    }
 
     private ComponentVisibilityData GetOrCreateVisibilityData(InstanceObject instanceObj)
     {
@@ -242,7 +295,7 @@ public class PerInstanceVisibilityService : IDisposable
     {
         if (e.Document?.RuntimeSerialNumber == _doc.RuntimeSerialNumber)
         {
-            _conduit.ClearAllManaged();
+            // Native conduit handles its own cleanup via DocEventHandler
         }
     }
 
@@ -265,10 +318,19 @@ public class PerInstanceVisibilityService : IDisposable
 
         RhinoDoc.CloseDocument -= OnDocumentClose;
         RhinoDoc.BeginOpenDocument -= OnBeginOpenDocument;
-        
-        _conduit.ClearAllManaged();
-        _conduit.Enabled = false;
-        
+
+        if (_nativeAvailable)
+        {
+            try
+            {
+                NativeVisibilityInterop.NativeCleanup();
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"WARNING: Native cleanup failed: {ex.Message}");
+            }
+        }
+
         _disposed = true;
     }
 
