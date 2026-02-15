@@ -368,6 +368,9 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
     private void OnEndOpenDocument(object sender, DocumentOpenEventArgs e)
     {
+        _isIsolated = false;
+        _isolateBanner.Visible = false;
+        _preIsolateVisibilityState.Clear();
         RefreshTree();
     }
 
