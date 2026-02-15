@@ -629,10 +629,11 @@ public class AssemblyTreeView : TreeGridView
         var item = e.Item as AssemblyTreeItem;
         if (item == null) return;
 
-        // Example: Gray out hidden nodes
+        // Gray out and italicize hidden nodes
         if (!item.Node.IsVisible)
         {
             e.ForegroundColor = Eto.Drawing.Colors.Gray;
+            e.Font = new Font(e.Font.Family, e.Font.Size, FontStyle.Italic);
         }
     }
 
