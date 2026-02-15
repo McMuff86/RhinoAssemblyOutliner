@@ -179,14 +179,11 @@ bool CVisibilityConduit::ExecConduit(
 				RhinoApp().Print(msg);
 			}
 
-			// CS_TRANSPARENT: draw with reduced alpha via display attrs
+			// CS_TRANSPARENT: draw normally for now
+			// TODO: proper transparency needs display mode override or custom material push
 			if (state == CS_TRANSPARENT)
 			{
-				// Draw the object, then overlay with a transparent effect
-				// We use the pipeline's object color push for a transparency hint
-				ON_Color transColor = GetComponentColor(pComponent, dp.GetRhinoDoc());
-				transColor.SetAlpha(80); // ~30% opacity
-				dp.DrawObject(pComponent, &instanceXform);
+				DrawComponent(dp, pComponent, instanceXform);
 			}
 			else
 			{
@@ -266,15 +263,9 @@ void CVisibilityConduit::DrawNestedFiltered(
 		}
 		else
 		{
-			if (state == CS_TRANSPARENT)
-			{
-				// Transparent draw — same as in main loop
-				dp.DrawObject(pComponent, &combinedXform);
-			}
-			else
-			{
-				DrawComponent(dp, pComponent, combinedXform);
-			}
+			// CS_TRANSPARENT treated same as visible for now
+			// TODO: proper transparency needs display mode override
+			DrawComponent(dp, pComponent, combinedXform);
 		}
 	}
 }
@@ -303,11 +294,12 @@ void CVisibilityConduit::DrawSelectionHighlights(CRhinoDisplayPipeline& dp)
 		ON_Xform instanceXform = pInstance->InstanceXform();
 		int componentCount = pDef->ObjectCount();
 
-		// Re-draw visible components — Rhino's DrawObject in SC_POSTDRAWOBJECTS
-		// will render them with the selection highlight appearance automatically
-		// since the parent object is selected. We draw wireframe outlines using
-		// the Rhino selection color.
+		// Re-draw visible components for selection highlight.
+		// TODO: DrawObject in SC_POSTDRAWOBJECTS may not render proper selection
+		// highlights. Consider drawing wireframe edges with pre-computed data
+		// instead of full object redraws for better visual fidelity.
 		ON_Color selColor = RhinoApp().AppSettings().SelectedObjectColor();
+		(void)selColor; // TODO: use for manual wireframe highlight
 
 		for (int i = 0; i < componentCount; i++)
 		{
@@ -344,13 +336,12 @@ void CVisibilityConduit::CalcVisibleBoundingBox()
 	if (!m_pChannelAttrs)
 		return;
 
+	// Try to get doc from channel attrs viewport, fall back to ActiveDoc
 	CRhinoDoc* pDoc = nullptr;
-	// Try to get the doc from the viewport
-	if (m_pChannelAttrs->m_pVP)
-	{
-		// We'll look up objects, need a doc reference
+	if (m_pChannelAttrs->m_pDP)
+		pDoc = m_pChannelAttrs->m_pDP->GetRhinoDoc();
+	if (!pDoc)
 		pDoc = RhinoApp().ActiveDoc();
-	}
 	if (!pDoc)
 		return;
 

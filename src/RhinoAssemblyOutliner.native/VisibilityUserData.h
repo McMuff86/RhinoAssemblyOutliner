@@ -6,12 +6,9 @@
 #include <unordered_set>
 #include <string>
 
-// Static UUID for this userdata class
+// UUID for this userdata class — defined once in VisibilityUserData.cpp
 // {A7B3C4D5-E6F7-4890-AB12-CD34EF56AB78}
-static const ON_UUID VisibilityUserDataId = {
-	0xa7b3c4d5, 0xe6f7, 0x4890,
-	{ 0xab, 0x12, 0xcd, 0x34, 0xef, 0x56, 0xab, 0x78 }
-};
+extern const ON_UUID VisibilityUserDataId;
 
 class CVisibilityData; // forward
 

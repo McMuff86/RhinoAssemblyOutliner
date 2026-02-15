@@ -4,12 +4,24 @@
 #include "VisibilityUserData.h"
 #include "VisibilityData.h"
 
+// {A7B3C4D5-E6F7-4890-AB12-CD34EF56AB78}
+const ON_UUID VisibilityUserDataId = {
+	0xa7b3c4d5, 0xe6f7, 0x4890,
+	{ 0xab, 0x12, 0xcd, 0x34, 0xef, 0x56, 0xab, 0x78 }
+};
+
+// {68EE26AC-D516-4F50-9DE2-46D105702323} — same as C# plugin
+static const ON_UUID PluginId = {
+	0x68ee26ac, 0xd516, 0x4f50,
+	{ 0x9d, 0xe2, 0x46, 0xd1, 0x05, 0x70, 0x23, 0x23 }
+};
+
 ON_OBJECT_IMPLEMENT(CComponentVisibilityData, ON_UserData, "A7B3C4D5-E6F7-4890-AB12-CD34EF56AB78");
 
 CComponentVisibilityData::CComponentVisibilityData()
 {
 	m_userdata_uuid = VisibilityUserDataId;
-	m_application_uuid = ON_rhino5_id; // Rhino application id
+	m_application_uuid = PluginId;
 	m_userdata_copycount = 1;
 }
 

@@ -1,8 +1,16 @@
 // DocEventHandler.cpp : Document event handler implementation
+// Uses document-level user strings (key: RAO_VisibilityState) for persistence.
+// Delegates serialization to NativeApi's PersistVisibilityState/LoadVisibilityState.
 
 #include "stdafx.h"
 #include "DocEventHandler.h"
-#include "VisibilityUserData.h"
+
+// Shared doc key — must match NativeApi.cpp
+static const wchar_t* RAO_DOC_KEY = L"RAO_VisibilityState";
+
+// Forward declarations for serialization helpers in NativeApi.cpp
+extern ON_wString SerializeVisibilityState(CVisibilityData& visData);
+extern void DeserializeVisibilityState(const ON_wString& data, CVisibilityData& visData);
 
 CDocEventHandler::CDocEventHandler(CVisibilityData& visData)
 	: m_visData(visData)
@@ -15,71 +23,19 @@ void CDocEventHandler::OnEndOpenDocument(CRhinoDoc& doc, const wchar_t* filename
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	// After doc loads, find all instance objects with our UserData and sync
-	CRhinoObjectIterator it(doc, CRhinoObjectIterator::normal_objects);
-	it.SetObjectFilter(ON::instance_reference);
-
-	const CRhinoObject* pObject = nullptr;
-	while ((pObject = it.Next()) != nullptr)
-	{
-		if (pObject->ObjectType() != ON::instance_reference)
-			continue;
-
-		const ON_UUID instanceId = pObject->Attributes().m_uuid;
-
-		// Check for our userdata on the object's attributes
-		CComponentVisibilityData* pUD = CComponentVisibilityData::Cast(
-			pObject->Attributes().GetUserData(VisibilityUserDataId));
-
-		if (pUD && !pUD->HiddenPaths.empty())
-		{
-			pUD->SyncToVisData(instanceId, m_visData);
-		}
-	}
+	// Read visibility state from document user strings
+	ON_wString serialized;
+	doc.GetDocTextString(RAO_DOC_KEY, serialized);
+	DeserializeVisibilityState(serialized, m_visData);
 }
 
 void CDocEventHandler::OnBeginSaveDocument(CRhinoDoc& doc, const wchar_t* filename, BOOL bExportSelected)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	// Before save, persist CVisibilityData to UserData on each managed instance
-	std::vector<ON_UUID> managedIds;
-	m_visData.GetManagedInstanceIds(managedIds);
-
-	for (const auto& instanceId : managedIds)
-	{
-		const CRhinoObject* pObject = doc.LookupObject(instanceId);
-		if (!pObject || pObject->ObjectType() != ON::instance_reference)
-			continue;
-
-		// Attach UserData to object attributes for persistence
-		ON_3dmObjectAttributes newAttrs = pObject->Attributes();
-
-		// Remove existing UD if present
-		CComponentVisibilityData* pExisting = CComponentVisibilityData::Cast(
-			newAttrs.GetUserData(VisibilityUserDataId));
-		if (pExisting)
-		{
-			newAttrs.DetachUserData(pExisting);
-			delete pExisting;
-		}
-
-		// Create and populate new UD
-		CComponentVisibilityData* pUD = new CComponentVisibilityData();
-		pUD->SyncFromVisData(instanceId, m_visData);
-
-		if (!pUD->HiddenPaths.empty())
-		{
-			if (!newAttrs.AttachUserData(pUD))
-				delete pUD;
-		}
-		else
-		{
-			delete pUD;
-		}
-
-		doc.ModifyObjectAttributes(CRhinoObjRef(pObject), newAttrs);
-	}
+	// Serialize visibility state to document user strings
+	ON_wString serialized = SerializeVisibilityState(m_visData);
+	doc.SetDocTextString(RAO_DOC_KEY, serialized);
 }
 
 void CDocEventHandler::OnCloseDocument(CRhinoDoc& doc)

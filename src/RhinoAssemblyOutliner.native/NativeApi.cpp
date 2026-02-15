@@ -4,7 +4,6 @@
 #include "NativeApi.h"
 #include "VisibilityConduit.h"
 #include "DocEventHandler.h"
-#include "VisibilityUserData.h"
 
 // Version: increment when API changes (4 = ComponentState enum + conduit improvements)
 static const int NATIVE_API_VERSION = 4;
@@ -32,7 +31,9 @@ bool __stdcall NativeInit()
 	g_pVisData = new CVisibilityData();
 	g_pConduit = new CVisibilityConduit(*g_pVisData);
 	g_pDocEventHandler = new CDocEventHandler(*g_pVisData);
-	g_pConduit->Enable(RhinoApp().ActiveDoc()->RuntimeSerialNumber());
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
+	if (pDoc)
+		g_pConduit->Enable(pDoc->RuntimeSerialNumber());
 
 	g_initialized = true;
 	return true;
@@ -133,6 +134,99 @@ int __stdcall GetNativeVersion()
 	return NATIVE_API_VERSION;
 }
 
+/// Serialize visibility data to a pipe-separated string for doc user strings.
+/// Format: <uuid>|<path>:<state>|<path>:<state>\n per instance
+ON_wString SerializeVisibilityState(CVisibilityData& visData)
+{
+	ON_wString result;
+	std::vector<ON_UUID> managedIds;
+	visData.GetManagedInstanceIds(managedIds);
+
+	for (const auto& instanceId : managedIds)
+	{
+		char uuidBuf[64];
+		ON_UuidToString(instanceId, uuidBuf);
+
+		ON_wString line;
+		line.Format(L"%S", uuidBuf);
+
+		// Get all states for this instance
+		CVisibilitySnapshot snap = visData.TakeSnapshot();
+		auto it = snap.m_data.find(instanceId);
+		if (it == snap.m_data.end() || it->second.states.empty())
+			continue;
+
+		for (const auto& pair : it->second.states)
+		{
+			ON_wString entry;
+			entry.Format(L"|%S:%d", pair.first.c_str(), (int)pair.second);
+			line += entry;
+		}
+
+		result += line;
+		result += L"\n";
+	}
+	return result;
+}
+
+/// Deserialize visibility data from doc user string format
+void DeserializeVisibilityState(const ON_wString& data, CVisibilityData& visData)
+{
+	if (data.IsEmpty())
+		return;
+
+	ON_String utf8(data);
+	const char* p = static_cast<const char*>(utf8);
+	std::string str(p);
+
+	size_t lineStart = 0;
+	while (lineStart < str.size())
+	{
+		size_t lineEnd = str.find('\n', lineStart);
+		if (lineEnd == std::string::npos)
+			lineEnd = str.size();
+
+		std::string line = str.substr(lineStart, lineEnd - lineStart);
+		lineStart = lineEnd + 1;
+
+		if (line.empty())
+			continue;
+
+		// Parse: <uuid>|<path>:<state>|<path>:<state>
+		size_t firstPipe = line.find('|');
+		if (firstPipe == std::string::npos)
+			continue;
+
+		std::string uuidStr = line.substr(0, firstPipe);
+		ON_UUID instanceId;
+		if (!ON_UuidFromString(uuidStr.c_str(), instanceId))
+			continue;
+
+		size_t pos = firstPipe + 1;
+		while (pos < line.size())
+		{
+			size_t nextPipe = line.find('|', pos);
+			if (nextPipe == std::string::npos)
+				nextPipe = line.size();
+
+			std::string entry = line.substr(pos, nextPipe - pos);
+			pos = nextPipe + 1;
+
+			size_t colon = entry.find(':');
+			if (colon == std::string::npos)
+				continue;
+
+			std::string path = entry.substr(0, colon);
+			int state = std::atoi(entry.substr(colon + 1).c_str());
+
+			if (state >= CS_VISIBLE && state <= CS_TRANSPARENT)
+				visData.SetState(instanceId, path.c_str(), static_cast<ComponentState>(state));
+		}
+	}
+}
+
+static const wchar_t* RAO_DOC_KEY = L"RAO_VisibilityState";
+
 void __stdcall PersistVisibilityState()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
@@ -144,42 +238,8 @@ void __stdcall PersistVisibilityState()
 	if (!pDoc)
 		return;
 
-	std::vector<ON_UUID> managedIds;
-	g_pVisData->GetManagedInstanceIds(managedIds);
-
-	for (const auto& instanceId : managedIds)
-	{
-		const CRhinoObject* pObject = pDoc->LookupObject(instanceId);
-		if (!pObject || pObject->ObjectType() != ON::instance_reference)
-			continue;
-
-		// Attach UserData to the object's attributes for persistence
-		ON_3dmObjectAttributes newAttrs = pObject->Attributes();
-
-		// Remove existing visibility userdata if present
-		CComponentVisibilityData* pExisting = CComponentVisibilityData::Cast(
-			newAttrs.GetUserData(VisibilityUserDataId));
-		if (pExisting)
-		{
-			newAttrs.DetachUserData(pExisting);
-			delete pExisting;
-		}
-
-		CComponentVisibilityData* pUD = new CComponentVisibilityData();
-		pUD->SyncFromVisData(instanceId, *g_pVisData);
-
-		if (!pUD->HiddenPaths.empty())
-		{
-			if (!newAttrs.AttachUserData(pUD))
-				delete pUD;
-		}
-		else
-		{
-			delete pUD;
-		}
-
-		pDoc->ModifyObjectAttributes(CRhinoObjRef(pObject), newAttrs);
-	}
+	ON_wString serialized = SerializeVisibilityState(*g_pVisData);
+	pDoc->SetDocTextString(RAO_DOC_KEY, serialized);
 }
 
 void __stdcall LoadVisibilityState()
@@ -193,24 +253,9 @@ void __stdcall LoadVisibilityState()
 	if (!pDoc)
 		return;
 
-	CRhinoObjectIterator it(*pDoc, CRhinoObjectIterator::normal_objects);
-	it.SetObjectFilter(ON::instance_reference);
-
-	const CRhinoObject* pObject = nullptr;
-	while ((pObject = it.Next()) != nullptr)
-	{
-		if (pObject->ObjectType() != ON::instance_reference)
-			continue;
-
-		const ON_UUID instanceId = pObject->Attributes().m_uuid;
-		CComponentVisibilityData* pUD = CComponentVisibilityData::Cast(
-			pObject->Attributes().GetUserData(VisibilityUserDataId));
-
-		if (pUD && !pUD->HiddenPaths.empty())
-		{
-			pUD->SyncToVisData(instanceId, *g_pVisData);
-		}
-	}
+	ON_wString serialized;
+	pDoc->GetDocTextString(RAO_DOC_KEY, serialized);
+	DeserializeVisibilityState(serialized, *g_pVisData);
 }
 
 int __stdcall GetManagedInstances(ON_UUID* buffer, int maxCount)
