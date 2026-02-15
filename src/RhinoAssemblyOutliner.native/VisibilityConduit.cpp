@@ -171,9 +171,18 @@ bool CVisibilityConduit::ExecConduit(
 			const ON_Mesh* pMesh = ON_Mesh::Cast(pGeom);
 			if (pMesh)
 			{
-				ON_Mesh meshCopy(*pMesh);
-				meshCopy.Transform(instanceXform);
-				dp.DrawMeshWires(meshCopy, selColor, 2);
+				// Draw mesh edges as wireframe lines
+				const ON_MeshTopology& top = pMesh->Topology();
+				for (int ei = 0; ei < top.m_tope.Count(); ei++)
+				{
+					const ON_MeshTopologyEdge& edge = top.m_tope[ei];
+					ON_3dPoint p0 = top.TopVertexPoint(edge.m_topvi[0]);
+					ON_3dPoint p1 = top.TopVertexPoint(edge.m_topvi[1]);
+					instanceXform.IsValid(); // ensure transform
+					p0.Transform(instanceXform);
+					p1.Transform(instanceXform);
+					dp.DrawLine(p0, p1, selColor, 2);
+				}
 			}
 
 			const ON_Extrusion* pExtr = ON_Extrusion::Cast(pGeom);
