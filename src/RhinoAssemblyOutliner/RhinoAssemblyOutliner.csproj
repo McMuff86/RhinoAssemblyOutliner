@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net7.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <NoWarn>NU1701</NoWarn>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -16,13 +16,13 @@
     <AssemblyName>RhinoAssemblyOutliner</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoAssemblyOutliner</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.0.0-rc.1</Version>
     <Authors>Adrian Muff</Authors>
     <Company>Muff Software</Company>
     <Copyright>Copyright © 2026 Adrian Muff</Copyright>
     <Description>A SolidWorks FeatureManager-style Assembly Outliner for Rhino 8</Description>
     <Product>RhinoAssemblyOutliner</Product>
-    <AssemblyTitle>Rhino Assembly Outliner</AssemblyTitle>
+    <AssemblyTitle>rhinoassemblyoutliner</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>

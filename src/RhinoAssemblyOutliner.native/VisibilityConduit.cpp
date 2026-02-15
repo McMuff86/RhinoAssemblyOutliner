@@ -4,15 +4,25 @@
 // m_bDrawObject = false, then manually draw only visible components
 // using dp.DrawObject() which uses Rhino's own rendering path.
 //
-// Path-based filtering allows hiding components at any nesting depth.
-// E.g. hiding path "1.0" hides the first child of the second component.
+// SC_CALCBOUNDINGBOX: computes bbox for only visible components of
+// managed instances, so ZoomExtents works correctly.
+//
+// SC_POSTDRAWOBJECTS: draws selection highlights using DrawObject
+// instead of manual per-edge extraction (no heap allocs per frame).
+//
+// Snapshot pattern: takes one lock-free snapshot at frame start,
+// uses it for all visibility checks during the frame.
 
 #include "stdafx.h"
 #include "VisibilityConduit.h"
 #include <cstdio>
 
 CVisibilityConduit::CVisibilityConduit(CVisibilityData& visData)
-	: CRhinoDisplayConduit(CSupportChannels::SC_DRAWOBJECT)
+	: CRhinoDisplayConduit(
+		CSupportChannels::SC_PREDRAWOBJECTS |
+		CSupportChannels::SC_CALCBOUNDINGBOX |
+		CSupportChannels::SC_DRAWOBJECT |
+		CSupportChannels::SC_POSTDRAWOBJECTS)
 	, m_visData(visData)
 {
 }
@@ -22,11 +32,44 @@ bool CVisibilityConduit::ExecConduit(
 	UINT nChannel,
 	bool& bTerminate)
 {
-	// We only handle SC_DRAWOBJECT
+	// --- SC_PREDRAWOBJECTS: take snapshot once per frame ---
+	if (nChannel == CSupportChannels::SC_PREDRAWOBJECTS)
+	{
+		m_snapshot = m_visData.TakeSnapshot();
+		m_snapshotValid = true;
+		return true;
+	}
+
+	// --- SC_CALCBOUNDINGBOX: contribute only visible component bboxes ---
+	if (nChannel == CSupportChannels::SC_CALCBOUNDINGBOX)
+	{
+		// Ensure we have a snapshot (in case SC_PREDRAWOBJECTS wasn't called)
+		if (!m_snapshotValid)
+		{
+			m_snapshot = m_visData.TakeSnapshot();
+			m_snapshotValid = true;
+		}
+		CalcVisibleBoundingBox();
+		return true;
+	}
+
+	// --- SC_POSTDRAWOBJECTS: draw selection highlights ---
+	if (nChannel == CSupportChannels::SC_POSTDRAWOBJECTS)
+	{
+		if (!m_snapshotValid)
+		{
+			m_snapshot = m_visData.TakeSnapshot();
+			m_snapshotValid = true;
+		}
+		DrawSelectionHighlights(dp);
+		m_snapshotValid = false; // Frame is done
+		return true;
+	}
+
+	// --- SC_DRAWOBJECT: filter managed instances ---
 	if (nChannel != CSupportChannels::SC_DRAWOBJECT)
 		return true;
 
-	// Get the object being drawn
 	if (!m_pChannelAttrs || !m_pChannelAttrs->m_pObject)
 		return true;
 
@@ -36,9 +79,17 @@ bool CVisibilityConduit::ExecConduit(
 	if (pObject->ObjectType() != ON::instance_reference)
 		return true;
 
-	// Check if this instance is managed by us (has hidden components)
 	const ON_UUID instanceId = pObject->Attributes().m_uuid;
-	if (!m_visData.IsManaged(instanceId))
+
+	// Ensure snapshot (fallback if SC_PREDRAWOBJECTS wasn't hit)
+	if (!m_snapshotValid)
+	{
+		m_snapshot = m_visData.TakeSnapshot();
+		m_snapshotValid = true;
+	}
+
+	// Check if this instance is managed by us
+	if (!m_snapshot.IsManaged(instanceId))
 		return true;
 
 	if (m_debugLogging)
@@ -68,14 +119,16 @@ bool CVisibilityConduit::ExecConduit(
 	for (int i = 0; i < componentCount; i++)
 	{
 		std::string path = std::to_string(i);
+		ComponentState state = m_snapshot.GetComponentState(instanceId, path.c_str());
 
-		// Check if this exact path is hidden
-		if (m_visData.IsComponentHidden(instanceId, path.c_str()))
+		// Skip hidden and suppressed components
+		if (state == CS_HIDDEN || state == CS_SUPPRESSED)
 		{
 			if (m_debugLogging)
 			{
 				ON_wString msg;
-				msg.Format(L"[Conduit]   component[%d] path=\"%S\" => HIDDEN, skipping\n", i, path.c_str());
+				msg.Format(L"[Conduit]   component[%d] path=\"%S\" => state=%d, skipping\n",
+					i, path.c_str(), (int)state);
 				RhinoApp().Print(msg);
 			}
 			continue;
@@ -95,9 +148,8 @@ bool CVisibilityConduit::ExecConduit(
 			const CRhinoInstanceObject* pNestedInstance =
 				static_cast<const CRhinoInstanceObject*>(pComponent);
 
-			if (m_visData.HasHiddenDescendants(instanceId, path.c_str()))
+			if (m_snapshot.HasHiddenDescendants(instanceId, path.c_str()))
 			{
-				// This sub-block has hidden children, recurse with filtering
 				if (m_debugLogging)
 				{
 					ON_wString msg;
@@ -108,7 +160,6 @@ bool CVisibilityConduit::ExecConduit(
 			}
 			else
 			{
-				// No hidden descendants — draw entire sub-block normally
 				if (m_debugLogging)
 				{
 					ON_wString msg;
@@ -123,15 +174,26 @@ bool CVisibilityConduit::ExecConduit(
 			if (m_debugLogging)
 			{
 				ON_wString msg;
-				msg.Format(L"[Conduit]   component[%d] path=\"%S\" type=%d => DrawObject\n", i, path.c_str(), pComponent->ObjectType());
+				msg.Format(L"[Conduit]   component[%d] path=\"%S\" type=%d state=%d => DrawObject\n",
+					i, path.c_str(), pComponent->ObjectType(), (int)state);
 				RhinoApp().Print(msg);
 			}
-			DrawComponent(dp, pComponent, instanceXform);
+
+			// CS_TRANSPARENT: draw normally for now
+			// TODO: proper transparency needs display mode override or custom material push
+			if (state == CS_TRANSPARENT)
+			{
+				DrawComponent(dp, pComponent, instanceXform);
+			}
+			else
+			{
+				DrawComponent(dp, pComponent, instanceXform);
+			}
 		}
 	}
 
-	// CRITICAL: return true to continue the pipeline for other objects.
-	// return false would abort the ENTIRE frame!
+	// Selection highlight is handled in SC_POSTDRAWOBJECTS, not here.
+
 	return true;
 }
 
@@ -143,9 +205,6 @@ void CVisibilityConduit::DrawComponent(
 	if (!pComponent)
 		return;
 
-	// Use dp.DrawObject with transform — this is the simplest and most
-	// complete approach. It uses Rhino's own rendering path, handles all
-	// geometry types, materials, display modes, and caching automatically.
 	dp.DrawObject(pComponent, &xform);
 }
 
@@ -164,21 +223,21 @@ void CVisibilityConduit::DrawNestedFiltered(
 	if (!pDef)
 		return;
 
-	// Combine transforms: parent * nested
 	ON_Xform combinedXform = parentXform * pNestedInstance->InstanceXform();
 
 	int componentCount = pDef->ObjectCount();
 	for (int i = 0; i < componentCount; i++)
 	{
 		std::string childPath = BuildPath(parentPath, i);
+		ComponentState state = m_snapshot.GetComponentState(topLevelId, childPath.c_str());
 
-		// Check if this exact path is hidden
-		if (m_visData.IsComponentHidden(topLevelId, childPath.c_str()))
+		if (state == CS_HIDDEN || state == CS_SUPPRESSED)
 		{
 			if (m_debugLogging)
 			{
 				ON_wString msg;
-				msg.Format(L"[Conduit]   nested path=\"%S\" => HIDDEN, skipping\n", childPath.c_str());
+				msg.Format(L"[Conduit]   nested path=\"%S\" => state=%d, skipping\n",
+					childPath.c_str(), (int)state);
 				RhinoApp().Print(msg);
 			}
 			continue;
@@ -193,20 +252,215 @@ void CVisibilityConduit::DrawNestedFiltered(
 			const CRhinoInstanceObject* pDeeper =
 				static_cast<const CRhinoInstanceObject*>(pComponent);
 
-			if (m_visData.HasHiddenDescendants(topLevelId, childPath.c_str()))
+			if (m_snapshot.HasHiddenDescendants(topLevelId, childPath.c_str()))
 			{
-				// Recurse deeper with filtering
 				DrawNestedFiltered(dp, pDeeper, combinedXform, topLevelId, childPath, depth + 1);
 			}
 			else
 			{
-				// No hidden descendants — draw entire sub-block normally
 				DrawComponent(dp, pComponent, combinedXform);
 			}
 		}
 		else
 		{
+			// CS_TRANSPARENT treated same as visible for now
+			// TODO: proper transparency needs display mode override
 			DrawComponent(dp, pComponent, combinedXform);
+		}
+	}
+}
+
+void CVisibilityConduit::DrawSelectionHighlights(CRhinoDisplayPipeline& dp)
+{
+	CRhinoDoc* pDoc = dp.GetRhinoDoc();
+	if (!pDoc)
+		return;
+
+	std::vector<ON_UUID> managedIds;
+	m_snapshot.GetManagedInstanceIds(managedIds);
+
+	for (const auto& instanceId : managedIds)
+	{
+		const CRhinoObject* pObj = pDoc->LookupObject(instanceId);
+		if (!pObj || !pObj->IsSelected() || pObj->ObjectType() != ON::instance_reference)
+			continue;
+
+		const CRhinoInstanceObject* pInstance =
+			static_cast<const CRhinoInstanceObject*>(pObj);
+		const CRhinoInstanceDefinition* pDef = pInstance->InstanceDefinition();
+		if (!pDef)
+			continue;
+
+		ON_Xform instanceXform = pInstance->InstanceXform();
+		int componentCount = pDef->ObjectCount();
+
+		// Re-draw visible components for selection highlight.
+		// TODO: DrawObject in SC_POSTDRAWOBJECTS may not render proper selection
+		// highlights. Consider drawing wireframe edges with pre-computed data
+		// instead of full object redraws for better visual fidelity.
+		ON_Color selColor = RhinoApp().AppSettings().SelectedObjectColor();
+		(void)selColor; // TODO: use for manual wireframe highlight
+
+		for (int i = 0; i < componentCount; i++)
+		{
+			std::string path = std::to_string(i);
+			ComponentState state = m_snapshot.GetComponentState(instanceId, path.c_str());
+			if (state == CS_HIDDEN || state == CS_SUPPRESSED)
+				continue;
+
+			const CRhinoObject* pComp = pDef->Object(i);
+			if (!pComp || !pComp->IsVisible())
+				continue;
+
+			if (pComp->ObjectType() == ON::instance_reference)
+			{
+				// For nested blocks, draw the whole sub-block with highlight
+				// if it has no hidden descendants; otherwise recurse
+				if (!m_snapshot.HasHiddenDescendants(instanceId, path.c_str()))
+				{
+					dp.DrawObject(pComp, &instanceXform);
+				}
+				// TODO: recurse for nested selection highlight if needed
+			}
+			else
+			{
+				// Use DrawObject — no manual edge extraction, no heap allocs
+				dp.DrawObject(pComp, &instanceXform);
+			}
+		}
+	}
+}
+
+void CVisibilityConduit::CalcVisibleBoundingBox()
+{
+	if (!m_pChannelAttrs)
+		return;
+
+	// Try to get doc from channel attrs viewport, fall back to ActiveDoc
+	CRhinoDoc* pDoc = nullptr;
+	if (m_pChannelAttrs->m_pDP)
+		pDoc = m_pChannelAttrs->m_pDP->GetRhinoDoc();
+	if (!pDoc)
+		pDoc = RhinoApp().ActiveDoc();
+	if (!pDoc)
+		return;
+
+	std::vector<ON_UUID> managedIds;
+	m_snapshot.GetManagedInstanceIds(managedIds);
+
+	for (const auto& instanceId : managedIds)
+	{
+		const CRhinoObject* pObj = pDoc->LookupObject(instanceId);
+		if (!pObj || pObj->ObjectType() != ON::instance_reference)
+			continue;
+
+		const CRhinoInstanceObject* pInstance =
+			static_cast<const CRhinoInstanceObject*>(pObj);
+		const CRhinoInstanceDefinition* pDef = pInstance->InstanceDefinition();
+		if (!pDef)
+			continue;
+
+		ON_Xform instanceXform = pInstance->InstanceXform();
+		int componentCount = pDef->ObjectCount();
+
+		ON_BoundingBox visibleBBox;
+		visibleBBox.Destroy(); // Start invalid
+
+		for (int i = 0; i < componentCount; i++)
+		{
+			std::string path = std::to_string(i);
+			ComponentState state = m_snapshot.GetComponentState(instanceId, path.c_str());
+
+			// Suppressed components are excluded from bbox entirely
+			// Hidden components still contribute (they're just visually hidden)
+			if (state == CS_SUPPRESSED)
+				continue;
+
+			const CRhinoObject* pComp = pDef->Object(i);
+			if (!pComp || !pComp->IsVisible())
+				continue;
+
+			if (pComp->ObjectType() == ON::instance_reference)
+			{
+				const CRhinoInstanceObject* pNested =
+					static_cast<const CRhinoInstanceObject*>(pComp);
+				// Recurse for nested blocks to exclude suppressed descendants
+				if (m_snapshot.HasHiddenDescendants(instanceId, path.c_str()))
+				{
+					AccumulateNestedBBox(pNested, instanceXform, instanceId, path, 0, visibleBBox);
+				}
+				else
+				{
+					ON_BoundingBox compBBox = pComp->BoundingBox();
+					compBBox.Transform(instanceXform);
+					visibleBBox.Union(compBBox);
+				}
+			}
+			else
+			{
+				ON_BoundingBox compBBox = pComp->BoundingBox();
+				compBBox.Transform(instanceXform);
+				visibleBBox.Union(compBBox);
+			}
+		}
+
+		if (visibleBBox.IsValid())
+		{
+			m_pChannelAttrs->m_BoundingBox.Union(visibleBBox);
+		}
+	}
+}
+
+void CVisibilityConduit::AccumulateNestedBBox(
+	const CRhinoInstanceObject* pNestedInstance,
+	const ON_Xform& parentXform,
+	const ON_UUID& topLevelId,
+	const std::string& parentPath,
+	int depth,
+	ON_BoundingBox& bbox)
+{
+	if (!pNestedInstance || depth >= MAX_NESTING_DEPTH)
+		return;
+
+	const CRhinoInstanceDefinition* pDef = pNestedInstance->InstanceDefinition();
+	if (!pDef)
+		return;
+
+	ON_Xform combinedXform = parentXform * pNestedInstance->InstanceXform();
+
+	int componentCount = pDef->ObjectCount();
+	for (int i = 0; i < componentCount; i++)
+	{
+		std::string childPath = BuildPath(parentPath, i);
+		ComponentState state = m_snapshot.GetComponentState(topLevelId, childPath.c_str());
+
+		if (state == CS_SUPPRESSED)
+			continue;
+
+		const CRhinoObject* pComp = pDef->Object(i);
+		if (!pComp || !pComp->IsVisible())
+			continue;
+
+		if (pComp->ObjectType() == ON::instance_reference)
+		{
+			const CRhinoInstanceObject* pDeeper =
+				static_cast<const CRhinoInstanceObject*>(pComp);
+			if (m_snapshot.HasHiddenDescendants(topLevelId, childPath.c_str()))
+			{
+				AccumulateNestedBBox(pDeeper, combinedXform, topLevelId, childPath, depth + 1, bbox);
+			}
+			else
+			{
+				ON_BoundingBox compBBox = pComp->BoundingBox();
+				compBBox.Transform(combinedXform);
+				bbox.Union(compBBox);
+			}
+		}
+		else
+		{
+			ON_BoundingBox compBBox = pComp->BoundingBox();
+			compBBox.Transform(combinedXform);
+			bbox.Union(compBBox);
 		}
 	}
 }
@@ -227,11 +481,9 @@ ON_Color CVisibilityConduit::GetComponentColor(
 
 	const ON_3dmObjectAttributes& attrs = pComponent->Attributes();
 
-	// Color source: by object
 	if (attrs.ColorSource() == ON::color_from_object)
 		return attrs.m_color;
 
-	// Color source: by layer
 	if (pDoc && attrs.ColorSource() == ON::color_from_layer)
 	{
 		int layerIndex = attrs.m_layer_index;
@@ -243,10 +495,8 @@ ON_Color CVisibilityConduit::GetComponentColor(
 		}
 	}
 
-	// Color source: by parent — use object color as fallback
 	if (attrs.ColorSource() == ON::color_from_parent)
 		return attrs.m_color;
 
-	// Fallback gray
 	return ON_Color(128, 128, 128);
 }

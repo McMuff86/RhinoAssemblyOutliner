@@ -70,7 +70,7 @@ public class BlockInstanceNode : AssemblyNode
     /// <param name="definition">The block definition.</param>
     /// <param name="instanceNumber">Instance number for display.</param>
     public BlockInstanceNode(InstanceObject instance, InstanceDefinition definition, int instanceNumber)
-        : base(FormatDisplayName(definition.Name, instanceNumber))
+        : base(instance.Id, FormatDisplayName(definition.Name, instanceNumber))
     {
         InstanceId = instance.Id;
         BlockDefinitionIndex = definition.Index;
@@ -106,7 +106,7 @@ public class BlockInstanceNode : AssemblyNode
     /// <param name="definition">The block definition.</param>
     /// <param name="doc">The Rhino document.</param>
     public BlockInstanceNode(InstanceDefinition definition, RhinoDoc doc)
-        : base(definition.Name)
+        : base(GuidFromDefinitionIndex(definition.Index), definition.Name)
     {
         InstanceId = Guid.Empty;
         BlockDefinitionIndex = definition.Index;
@@ -117,6 +117,18 @@ public class BlockInstanceNode : AssemblyNode
         LinkedFilePath = IsLinkedBlock(definition) ? definition.SourceArchive : null;
         TotalInstanceCount = definition.UseCount();
         UserAttributes = new Dictionary<string, string>();
+    }
+
+    /// <summary>
+    /// Creates a deterministic GUID from a definition index (for definition-only nodes without an instance).
+    /// </summary>
+    private static Guid GuidFromDefinitionIndex(int index)
+    {
+        var bytes = new byte[16];
+        BitConverter.GetBytes(index).CopyTo(bytes, 0);
+        // Use a namespace marker to avoid collisions with real object IDs
+        bytes[15] = 0xDE; // "DEfinition"
+        return new Guid(bytes);
     }
 
     /// <summary>

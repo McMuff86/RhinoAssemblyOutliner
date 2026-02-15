@@ -14,13 +14,22 @@ namespace RhinoAssemblyOutliner.Services;
 /// </summary>
 public class VisibilityService
 {
-    private readonly RhinoDoc _doc;
+    private readonly uint _docSerialNumber;
     private bool _nativeInitialized;
 
     public VisibilityService(RhinoDoc doc)
     {
-        _doc = doc ?? throw new ArgumentNullException(nameof(doc));
+        if (doc == null) throw new ArgumentNullException(nameof(doc));
+        _docSerialNumber = doc.RuntimeSerialNumber;
         InitializeNative();
+    }
+
+    /// <summary>
+    /// Gets the document by serial number. Returns null if document was closed.
+    /// </summary>
+    private RhinoDoc GetDoc()
+    {
+        return RhinoDoc.FromRuntimeSerialNumber(_docSerialNumber);
     }
 
     /// <summary>
@@ -42,7 +51,7 @@ public class VisibilityService
             // Top-level instance → use standard Rhino show/hide
             if (blockNode.InstanceId != Guid.Empty)
             {
-                var obj = _doc.Objects.FindId(blockNode.InstanceId);
+                var obj = GetDoc()?.Objects.FindId(blockNode.InstanceId);
                 if (obj != null)
                 {
                     bool newState = !IsVisible(obj);
@@ -54,7 +63,7 @@ public class VisibilityService
                         SetChildrenVisibility(node, newState);
                     }
 
-                    _doc.Views.Redraw();
+                    GetDoc()?.Views.Redraw();
                     return newState;
                 }
             }
@@ -75,7 +84,7 @@ public class VisibilityService
             }
             else if (blockNode.InstanceId != Guid.Empty)
             {
-                var obj = _doc.Objects.FindId(blockNode.InstanceId);
+                var obj = GetDoc()?.Objects.FindId(blockNode.InstanceId);
                 if (obj != null)
                 {
                     SetVisibility(obj, visible);
@@ -95,8 +104,11 @@ public class VisibilityService
     /// </summary>
     public void Isolate(AssemblyNode node)
     {
+        var doc = GetDoc();
+        if (doc == null) return;
+
         // Hide all top-level block instances
-        foreach (var obj in _doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
         {
             SetVisibility(obj, false);
         }
@@ -104,7 +116,7 @@ public class VisibilityService
         // Show only the selected node and its ancestors
         ShowNodeAndAncestors(node);
 
-        _doc.Views.Redraw();
+        doc.Views.Redraw();
     }
 
     /// <summary>
@@ -112,7 +124,10 @@ public class VisibilityService
     /// </summary>
     public void ShowAll()
     {
-        foreach (var obj in _doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        var doc = GetDoc();
+        if (doc == null) return;
+
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
         {
             if (!IsVisible(obj))
             {
@@ -129,7 +144,7 @@ public class VisibilityService
                 }
             }
         }
-        _doc.Views.Redraw();
+        doc.Views.Redraw();
     }
 
     /// <summary>
@@ -138,7 +153,7 @@ public class VisibilityService
     public void Hide(AssemblyNode node, bool includeChildren = true)
     {
         SetVisibility(node, false, includeChildren);
-        _doc.Views.Redraw();
+        GetDoc()?.Views.Redraw();
     }
 
     /// <summary>
@@ -147,7 +162,7 @@ public class VisibilityService
     public void Show(AssemblyNode node, bool includeChildren = true)
     {
         SetVisibility(node, true, includeChildren);
-        _doc.Views.Redraw();
+        GetDoc()?.Views.Redraw();
     }
 
     #region Native Per-Instance Visibility
@@ -222,7 +237,7 @@ public class VisibilityService
         NativeVisibilityInterop.SetComponentVisibility(ref topLevelId, componentPath, newVisible);
         blockNode.IsVisible = newVisible;
 
-        _doc.Views.Redraw();
+        GetDoc()?.Views.Redraw();
         return newVisible;
     }
 
@@ -251,11 +266,11 @@ public class VisibilityService
     {
         if (visible)
         {
-            _doc.Objects.Show(obj.Id, ignoreLayerMode: false);
+            GetDoc()?.Objects.Show(obj.Id, ignoreLayerMode: false);
         }
         else
         {
-            _doc.Objects.Hide(obj.Id, ignoreLayerMode: false);
+            GetDoc()?.Objects.Hide(obj.Id, ignoreLayerMode: false);
         }
     }
 
@@ -271,7 +286,7 @@ public class VisibilityService
                 }
                 else if (blockChild.InstanceId != Guid.Empty)
                 {
-                    var obj = _doc.Objects.FindId(blockChild.InstanceId);
+                    var obj = GetDoc()?.Objects.FindId(blockChild.InstanceId);
                     if (obj != null)
                     {
                         SetVisibility(obj, visible);
@@ -287,7 +302,7 @@ public class VisibilityService
     {
         if (node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
         {
-            var obj = _doc.Objects.FindId(blockNode.InstanceId);
+            var obj = GetDoc()?.Objects.FindId(blockNode.InstanceId);
             if (obj != null)
             {
                 SetVisibility(obj, true);
@@ -301,7 +316,7 @@ public class VisibilityService
         {
             if (parent is BlockInstanceNode parentBlock && parentBlock.InstanceId != Guid.Empty)
             {
-                var obj = _doc.Objects.FindId(parentBlock.InstanceId);
+                var obj = GetDoc()?.Objects.FindId(parentBlock.InstanceId);
                 if (obj != null)
                 {
                     SetVisibility(obj, true);

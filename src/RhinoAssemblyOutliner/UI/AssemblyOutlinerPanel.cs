@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using Eto.Drawing;
 using Eto.Forms;
 using Rhino;
@@ -15,9 +18,10 @@ namespace RhinoAssemblyOutliner.UI;
 /// Displays a hierarchical tree view of block instances in the document.
 /// </summary>
 [System.Runtime.InteropServices.Guid("7E8F9A0B-1C2D-3E4F-5A6B-7C8D9E0F1A2B")]
-public class AssemblyOutlinerPanel : Panel, IPanel
+public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
 {
     private readonly uint _documentSerialNumber;
+    private bool _disposed;
     private AssemblyTreeView _treeView;
     private DetailPanel _detailPanel;
     private SearchBox _searchBox;
@@ -32,15 +36,29 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private string _assemblyRootName = "";
     
     // Event debouncing
+    private Label _statusBar;
     private System.Timers.Timer _refreshTimer;
-    private bool _needsRefresh;
+    private int _needsRefresh; // 0 or 1, accessed via Interlocked
     private bool _isSyncingFromViewport;
     private bool _isSyncingFromTree;
+    
+    // Isolate mode state
+    private Panel _isolateBanner;
+    private Label _isolateBannerLabel;
+    private bool _isIsolated;
+    private string _isolatedNodeName = "";
+    private Dictionary<Guid, bool> _preIsolateVisibilityState = new();
 
     /// <summary>
     /// Gets the panel GUID for registration.
     /// </summary>
     public static Guid PanelId => typeof(AssemblyOutlinerPanel).GUID;
+
+    /// <summary>
+    /// Gets the document associated with this panel via serial number.
+    /// Centralizes doc access to avoid scattered RhinoDoc.ActiveDoc calls.
+    /// </summary>
+    private RhinoDoc GetDoc() => RhinoDoc.FromRuntimeSerialNumber(_documentSerialNumber);
 
     /// <summary>
     /// Creates a new Assembly Outliner panel.
@@ -55,6 +73,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _refreshTimer.AutoReset = false;
         _refreshTimer.Elapsed += (s, e) => RefreshTreeDebounced();
         
+        MinimumSize = new Eto.Drawing.Size(300, 200);
         Content = BuildUI();
     }
 
@@ -72,12 +91,19 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
         // Tree view (main content)
         _treeView = new AssemblyTreeView();
-        _treeView.SelectionChanged += OnTreeSelectionChanged;
+        _treeView.GetDoc = GetDoc;
+        _treeView.NodeSelectionChanged += OnTreeSelectionChanged;
         _treeView.NodeActivated += OnTreeNodeActivated;
         _treeView.VisibilityToggleRequested += OnVisibilityToggleRequested;
         _treeView.IsolateRequested += OnIsolateRequested;
         _treeView.ShowAllRequested += OnShowAllRequested;
         _treeView.SetAsAssemblyRootRequested += OnSetAsAssemblyRootRequested;
+        _treeView.HideRequested += OnHideRequested;
+        _treeView.ShowRequested += OnShowRequested;
+        _treeView.ZoomToRequested += OnZoomToRequested;
+        _treeView.HideWithChildrenRequested += OnHideWithChildrenRequested;
+        _treeView.ShowWithChildrenRequested += OnShowWithChildrenRequested;
+        _treeView.ItemReordered += OnItemReordered;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -95,13 +121,51 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         // Toolbar
         var toolbar = BuildToolbar();
 
+        // Status bar
+        _statusBar = new Label
+        {
+            Text = "0 instances",
+            TextColor = Colors.Gray,
+            Font = SystemFonts.Label(SystemFonts.Default().Size - 1)
+        };
+        var statusPanel = new Panel
+        {
+            Content = _statusBar,
+            Padding = new Padding(6, 2)
+        };
+
+        // Isolate banner (hidden by default)
+        _isolateBannerLabel = new Label
+        {
+            Text = "",
+            TextColor = Colors.White,
+            Font = SystemFonts.Bold()
+        };
+        var exitIsolateButton = new Button { Text = "✕ Exit Isolate", Width = 100 };
+        exitIsolateButton.Click += (s, e) => ExitIsolateMode();
+        var bannerContent = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Padding = new Padding(8, 4),
+            Items = { _isolateBannerLabel, new StackLayoutItem(null, true), exitIsolateButton }
+        };
+        _isolateBanner = new Panel
+        {
+            Content = bannerContent,
+            BackgroundColor = Color.FromArgb(50, 100, 180),
+            Visible = false
+        };
+
         // Main layout
         var layout = new DynamicLayout();
         layout.BeginVertical();
         layout.Add(toolbar);
+        layout.Add(_isolateBanner);
         layout.Add(_searchBox);
         layout.EndVertical();
         layout.Add(splitter, yscale: true);
+        layout.Add(statusPanel);
 
         return layout;
     }
@@ -221,8 +285,27 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     public void PanelClosing(uint documentSerialNumber, bool onCloseDocument)
     {
+        Dispose();
+    }
+
+    /// <summary>
+    /// Disposes resources held by this panel.
+    /// </summary>
+    public new void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
         UnsubscribeEvents();
-        _refreshTimer?.Dispose();
+
+        if (_refreshTimer != null)
+        {
+            _refreshTimer.Stop();
+            _refreshTimer.Dispose();
+            _refreshTimer = null;
+        }
+
+        base.Dispose();
     }
 
     #endregion
@@ -314,6 +397,9 @@ public class AssemblyOutlinerPanel : Panel, IPanel
 
     private void OnEndOpenDocument(object sender, DocumentOpenEventArgs e)
     {
+        _isIsolated = false;
+        _isolateBanner.Visible = false;
+        _preIsolateVisibilityState.Clear();
         RefreshTree();
     }
 
@@ -333,7 +419,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
             _isSyncingFromTree = true;
             try
             {
-                var doc = RhinoDoc.ActiveDoc;
+                var doc = GetDoc();
                 if (doc != null && blockNode.InstanceId != Guid.Empty)
                 {
                     doc.Objects.UnselectAll();
@@ -353,7 +439,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         // Double-click: Zoom to object
         if (node is BlockInstanceNode blockNode)
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc != null)
             {
                 blockNode.ZoomToInstance(doc);
@@ -366,22 +452,182 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         EnsureVisibilityService();
         _visibilityService?.ToggleVisibility(node);
         _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnIsolateRequested(object sender, AssemblyNode node)
     {
-        EnsureVisibilityService();
-        _visibilityService?.Isolate(node);
-        _treeView.ReloadData();
+        if (_isIsolated)
+            ExitIsolateMode();
+        EnterIsolateMode(node);
     }
 
     private void OnShowAllRequested(object sender, EventArgs e)
     {
+        if (_isIsolated)
+        {
+            ExitIsolateMode();
+        }
+        else
+        {
+            EnsureVisibilityService();
+            _visibilityService?.ShowAll();
+            RefreshTree();
+        }
+    }
+
+    #region Isolate Mode
+
+    /// <summary>
+    /// Enters isolate mode: stores current visibility, hides everything except
+    /// the selected node and its children.
+    /// </summary>
+    private void EnterIsolateMode(AssemblyNode node)
+    {
+        var doc = GetDoc();
+        if (doc == null) return;
+
         EnsureVisibilityService();
-        _visibilityService?.ShowAll();
+
+        // Store pre-isolate visibility state
+        _preIsolateVisibilityState.Clear();
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        {
+            _preIsolateVisibilityState[obj.Id] = obj.Visible;
+        }
+
+        // Hide everything
+        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        {
+            doc.Objects.Hide(obj.Id, ignoreLayerMode: false);
+        }
+
+        // Show the selected node, its ancestors, and all its children
+        ShowNodeAndDescendants(node, doc);
+        doc.Views.Redraw();
+
+        // Update UI
+        _isIsolated = true;
+        _isolatedNodeName = node.DisplayName;
+        _isolateBannerLabel.Text = $"🔍 ISOLATED: {_isolatedNodeName}";
+        _isolateBanner.Visible = true;
+
         RefreshTree();
     }
+
+    /// <summary>
+    /// Exits isolate mode and restores the pre-isolate visibility state.
+    /// </summary>
+    private void ExitIsolateMode()
+    {
+        var doc = GetDoc();
+        if (doc == null || !_isIsolated) return;
+
+        // Restore pre-isolate visibility state
+        foreach (var kvp in _preIsolateVisibilityState)
+        {
+            if (kvp.Value)
+                doc.Objects.Show(kvp.Key, ignoreLayerMode: false);
+            else
+                doc.Objects.Hide(kvp.Key, ignoreLayerMode: false);
+        }
+        _preIsolateVisibilityState.Clear();
+        doc.Views.Redraw();
+
+        _isIsolated = false;
+        _isolatedNodeName = "";
+        _isolateBanner.Visible = false;
+
+        RefreshTree();
+    }
+
+    /// <summary>
+    /// Shows a node, its parent chain, and all descendants.
+    /// </summary>
+    private void ShowNodeAndDescendants(AssemblyNode node, RhinoDoc doc)
+    {
+        if (node is BlockInstanceNode blockNode && blockNode.InstanceId != Guid.Empty)
+        {
+            doc.Objects.Show(blockNode.InstanceId, ignoreLayerMode: false);
+            node.IsVisible = true;
+        }
+
+        // Show parent chain
+        var parent = node.Parent;
+        while (parent != null)
+        {
+            if (parent is BlockInstanceNode parentBlock && parentBlock.InstanceId != Guid.Empty)
+            {
+                doc.Objects.Show(parentBlock.InstanceId, ignoreLayerMode: false);
+                parent.IsVisible = true;
+            }
+            parent = parent.Parent;
+        }
+
+        // Show all descendants
+        foreach (var child in node.GetAllDescendants())
+        {
+            if (child is BlockInstanceNode childBlock && childBlock.InstanceId != Guid.Empty)
+            {
+                doc.Objects.Show(childBlock.InstanceId, ignoreLayerMode: false);
+                child.IsVisible = true;
+            }
+        }
+    }
+
+    #endregion
     
+    private void OnHideRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Hide(node);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
+    }
+
+    private void OnShowRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Show(node);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
+    }
+
+    private void OnZoomToRequested(object sender, AssemblyNode node)
+    {
+        if (node is BlockInstanceNode blockNode)
+        {
+            var doc = GetDoc();
+            if (doc != null)
+            {
+                blockNode.ZoomToInstance(doc);
+            }
+        }
+    }
+
+    private void OnHideWithChildrenRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Hide(node, includeChildren: true);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
+    }
+
+    private void OnShowWithChildrenRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Show(node, includeChildren: true);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
+    }
+
+    private void OnItemReordered(object sender, (int fromIndex, int toIndex) e)
+    {
+        // Reorder already applied in model by TreeView.
+        // Future: persist order via UserText or file.
+        RhinoApp.WriteLine($"AssemblyOutliner: Reordered item from {e.fromIndex} to {e.toIndex}");
+    }
+
     private void OnSetAsAssemblyRootRequested(object sender, BlockInstanceNode blockNode)
     {
         if (blockNode != null && blockNode.InstanceId != Guid.Empty)
@@ -390,12 +636,18 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         }
     }
 
+    private uint _visibilityServiceDocSerial;
+
     private void EnsureVisibilityService()
     {
-        var doc = RhinoDoc.ActiveDoc;
-        if (doc != null && _visibilityService == null)
+        var doc = GetDoc();
+        if (doc == null) return;
+
+        // Recreate if doc changed or not yet created
+        if (_visibilityService == null || _visibilityServiceDocSerial != doc.RuntimeSerialNumber)
         {
             _visibilityService = new VisibilityService(doc);
+            _visibilityServiceDocSerial = doc.RuntimeSerialNumber;
         }
     }
 
@@ -404,11 +656,35 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     #region Tree Management
 
     /// <summary>
+    /// Updates the status bar with current counts.
+    /// </summary>
+    private void UpdateStatusBar(AssemblyNode root)
+    {
+        if (root == null)
+        {
+            _statusBar.Text = "0 instances";
+            return;
+        }
+
+        var allNodes = root.GetAllDescendants().OfType<BlockInstanceNode>().ToList();
+        int total = allNodes.Count;
+        int hidden = allNodes.Count(n => !n.IsVisible);
+        int definitions = allNodes.Select(n => n.BlockDefinitionIndex).Distinct().Count();
+
+        var parts = new List<string>();
+        parts.Add($"{definitions} definitions");
+        parts.Add($"{total} instances");
+        if (hidden > 0) parts.Add($"{hidden} hidden");
+        if (_isIsolated) parts.Add($"🔍 ISOLATED: {_isolatedNodeName}");
+        _statusBar.Text = string.Join(" | ", parts);
+    }
+
+    /// <summary>
     /// Queues a debounced tree refresh.
     /// </summary>
     private void QueueRefresh()
     {
-        _needsRefresh = true;
+        Interlocked.Exchange(ref _needsRefresh, 1);
         _refreshTimer.Stop();
         _refreshTimer.Start();
     }
@@ -418,9 +694,8 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     private void RefreshTreeDebounced()
     {
-        if (_needsRefresh)
+        if (Interlocked.CompareExchange(ref _needsRefresh, 0, 1) == 1)
         {
-            _needsRefresh = false;
             RhinoApp.InvokeOnUiThread((Action)RefreshTree);
         }
     }
@@ -432,7 +707,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     {
         try
         {
-            var doc = RhinoDoc.ActiveDoc;
+            var doc = GetDoc();
             if (doc == null) return;
 
             var builder = new AssemblyTreeBuilder(doc);
@@ -444,6 +719,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
                 if (assemblyRoot != null)
                 {
                     _treeView.LoadTreeFromBlock(assemblyRoot);
+                    UpdateStatusBar(assemblyRoot);
                 }
                 else
                 {
@@ -459,6 +735,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
                 if (_rootNode != null)
                 {
                     _treeView.LoadTree(_rootNode);
+                    UpdateStatusBar(_rootNode);
                 }
             }
         }

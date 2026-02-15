@@ -1,4 +1,6 @@
-using System.Collections.ObjectModel;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Rhino.DocObjects;
 
 namespace RhinoAssemblyOutliner.Model;
@@ -7,7 +9,7 @@ namespace RhinoAssemblyOutliner.Model;
 /// Base class for all nodes in the assembly tree.
 /// Represents a hierarchical element that can contain children.
 /// </summary>
-public abstract class AssemblyNode
+public abstract class AssemblyNode : IAssemblyNode
 {
     /// <summary>
     /// Unique identifier for this node.
@@ -20,14 +22,29 @@ public abstract class AssemblyNode
     public string DisplayName { get; set; }
 
     /// <summary>
+    /// Name property for IAssemblyNode interface (delegates to DisplayName).
+    /// </summary>
+    string IAssemblyNode.Name => DisplayName;
+
+    /// <summary>
+    /// Explicit interface implementation for Children as IReadOnlyList.
+    /// </summary>
+    IReadOnlyList<AssemblyNode> IAssemblyNode.Children => Children;
+
+    /// <summary>
+    /// Explicit interface implementation for Parent (non-nullable).
+    /// </summary>
+    AssemblyNode IAssemblyNode.Parent { get => Parent!; set => Parent = value; }
+
+    /// <summary>
     /// Parent node in the hierarchy. Null for root nodes.
     /// </summary>
-    public AssemblyNode? Parent { get; internal set; }
+    public AssemblyNode? Parent { get; set; }
 
     /// <summary>
     /// Child nodes contained within this node.
     /// </summary>
-    public ObservableCollection<AssemblyNode> Children { get; }
+    public List<AssemblyNode> Children { get; }
 
     /// <summary>
     /// Indicates whether this node is currently visible in the viewport.
@@ -58,11 +75,11 @@ public abstract class AssemblyNode
     /// Creates a new assembly node.
     /// </summary>
     /// <param name="displayName">Display name for the node.</param>
-    protected AssemblyNode(string displayName)
+    protected AssemblyNode(Guid id, string displayName)
     {
-        Id = Guid.NewGuid();
+        Id = id;
         DisplayName = displayName;
-        Children = new ObservableCollection<AssemblyNode>();
+        Children = new List<AssemblyNode>();
     }
 
     /// <summary>

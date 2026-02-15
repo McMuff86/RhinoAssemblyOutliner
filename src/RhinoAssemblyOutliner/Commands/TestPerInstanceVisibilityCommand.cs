@@ -15,14 +15,34 @@ namespace RhinoAssemblyOutliner.Commands;
 /// </summary>
 public class TestPerInstanceVisibilityCommand : Command
 {
-    private static PerInstanceVisibilityService _service;
+    private static PerInstanceVisibilityService? _service;
+    private static uint _serviceDocSerial;
 
     public override string EnglishName => "TestPerInstanceVisibility";
 
+    static TestPerInstanceVisibilityCommand()
+    {
+        // Reset stale service reference when document closes
+        RhinoDoc.CloseDocument += (sender, e) =>
+        {
+            if (_service != null && _serviceDocSerial == e.DocumentSerialNumber)
+            {
+                _service.Dispose();
+                _service = null;
+                _serviceDocSerial = 0;
+            }
+        };
+    }
+
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
-        // Initialize service if needed
-        _service ??= new PerInstanceVisibilityService(doc);
+        // Initialize service if needed, or recreate if doc changed
+        if (_service == null || _serviceDocSerial != doc.RuntimeSerialNumber)
+        {
+            _service?.Dispose();
+            _service = new PerInstanceVisibilityService(doc);
+            _serviceDocSerial = doc.RuntimeSerialNumber;
+        }
 
         // Select a block instance
         var go = new GetObject();

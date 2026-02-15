@@ -1,88 +1,88 @@
-# CLAUDE.md - RhinoAssemblyOutliner
+# CLAUDE.md - RhinoAssemblyOutliner (BlockForge)
 
 ## Projekt-Übersicht
 
-Ein SolidWorks FeatureManager-artiger **Assembly Outliner** für Rhino 8. Zeigt Block-Hierarchien in einer dockbaren Baumstruktur.
+**BlockForge** — ein SolidWorks FeatureManager-artiger Assembly Outliner für Rhino 8 mit Per-Instance Component Visibility.
 
-**Repo:** https://github.com/McMuff86/RhinoAssemblyOutliner
+**Repo:** https://github.com/McMuff86/RhinoAssemblyOutliner  
 **Stack:** C# / .NET 7.0 / RhinoCommon 8.0 / Eto.Forms + C++ / Rhino 8 C++ SDK
 
-## Architektur: Hybrid C#/C++
+## Architektur: Hybrid C#/C++ (v3 — Definition Cloning)
+
+> **DisplayConduit-Ansatz aufgegeben** (Rhino rendert Block-Instanzen atomar).  
+> **Neuer Ansatz:** Definition Cloning + ON_UserData + Custom Grips.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                     Rhino 8                          │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│  ┌──────────────────────┐                            │
-│  │  C# Plugin (.rhp)    │  ← Einziges Rhino Plugin  │
-│  │                      │                            │
-│  │  - Outliner Panel    │                            │
-│  │  - Commands          │     P/Invoke               │
-│  │  - Tree View         │──────────────┐             │
-│  │  - Selection Sync    │              │             │
-│  └──────────────────────┘              ▼             │
-│                            ┌──────────────────────┐  │
-│                            │  C++ DLL (.dll)      │  │
-│                            │                      │  │
-│                            │  - Display Conduit   │  │
-│                            │  - Block Rendering   │  │
-│                            │  - Visibility Logic  │  │
-│                            │  - Cache Management  │  │
-│                            └──────────────────────┘  │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    HYBRID ARCHITECTURE                       │
+│                                                             │
+│  ┌──────────────────┐     ┌──────────────────────────────┐  │
+│  │  C++ Native DLL  │     │  C# RhinoCommon Plugin       │  │
+│  │                  │     │                              │  │
+│  │  • ON_UserData   │◄───►│  • AssemblyManager           │  │
+│  │    (persistence) │     │  • VariantManager (cloning)  │  │
+│  │  • Event Handler │     │  • ConfigurationService      │  │
+│  │  • Custom Grips  │     │  • UI Panel (Eto)            │  │
+│  └──────────────────┘     └──────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Projekt-Struktur
 
 ```
 RhinoAssemblyOutliner/
-├── RhinoAssemblyOutliner.sln              # Solution (C# + C++ Projekte)
+├── ROADMAP.md                             # Phasen-Roadmap (BlockForge Vision)
+├── CHANGELOG.md                           # Changelog (Keep a Changelog format)
 ├── src/
 │   ├── RhinoAssemblyOutliner/             # C# Plugin (UI + Commands)
-│   │   ├── RhinoAssemblyOutlinerPlugin.cs # Plugin-Einstiegspunkt
-│   │   ├── Model/                         # Datenmodelle
-│   │   │   ├── AssemblyNode.cs            # Basis-Knoten
-│   │   │   ├── BlockInstanceNode.cs       # Block-Instanz
-│   │   │   ├── DocumentNode.cs            # Dokument-Root
-│   │   │   ├── OutlinerViewMode.cs        # Assembly/Document Mode
-│   │   │   └── AssemblyTreeBuilder.cs     # Tree-Builder
-│   │   ├── UI/                            # Eto.Forms UI
-│   │   │   ├── AssemblyOutlinerPanel.cs   # Haupt-Panel (IPanel)
-│   │   │   ├── AssemblyTreeView.cs        # TreeGridView
-│   │   │   └── DetailPanel.cs             # Properties
+│   │   ├── Model/                         # Datenmodelle (AssemblyNode, TreeBuilder)
+│   │   ├── UI/                            # Eto.Forms (Panel, TreeView, DetailPanel)
 │   │   ├── Commands/                      # Rhino Commands
-│   │   │   ├── OpenOutlinerCommand.cs
-│   │   │   ├── RefreshOutlinerCommand.cs
-│   │   │   └── TestPerInstanceVisibilityCommand.cs
-│   │   └── Services/                      # Business Logic
-│   │       ├── SelectionSyncService.cs
-│   │       ├── VisibilityService.cs
-│   │       └── PerInstanceVisibility/     # C# PoC (wird durch C++ ersetzt)
-│   │           ├── ComponentVisibilityData.cs
-│   │           ├── PerInstanceVisibilityConduit.cs
-│   │           └── PerInstanceVisibilityService.cs
-│   │
+│   │   └── Services/                      # Business Logic + PerInstanceVisibility
 │   └── RhinoAssemblyOutliner.native/      # C++ Native DLL
-│       ├── RhinoAssemblyOutliner.native.vcxproj
-│       ├── RhinoAssemblyOutliner.native.def  # Export-Definitionen
-│       ├── stdafx.h/cpp                   # Precompiled Header + Rhino SDK
-│       ├── RhinoAssemblyOutliner.nativeApp.h/cpp  # MFC DLL Entry
-│       └── NativeApi.h/cpp                # Exportierte C API (P/Invoke)
-│
-├── tests/                                 # xUnit Tests
+│       ├── NativeApi.h/cpp                # P/Invoke Bridge
+│       └── CustomObject/                  # Assembly Object Prototyp
+├── tests/                                 # xUnit Tests (97 tests)
 ├── docs/
-│   ├── SPEC.md                            # Detaillierte Spezifikation
-│   ├── ARCHITECTURE.md                    # Architektur-Diagramme
-│   ├── CPP_ROADMAP.md                     # C++ Implementation Roadmap
-│   ├── CPP_SDK_RESEARCH.md               # C++ SDK API Research
-│   ├── PER_INSTANCE_VISIBILITY.md        # PoC Ergebnisse + Learnings
-│   ├── FEATURE_ASSEMBLY_MODE.md          # Assembly Mode Feature
-│   ├── PACKAGING.md                      # Yak Distribution
-│   ├── USER_GUIDE.md                     # Benutzerhandbuch
-│   └── TEST_PLAN.md                      # Testplan
+│   ├── architecture/                      # ← AKTUELLE ARCHITEKTUR
+│   │   └── assembly-object-architecture.md  # Hybrid Architecture Design
+│   ├── vision/
+│   │   └── product-vision-v2.md           # BlockForge Product Vision
+│   ├── research/                          # Research (alle relevant)
+│   │   ├── architecture-proposal-v3.md    # Definition Cloning Proposal
+│   │   ├── custom-object-feasibility.md   # C++ Custom Object Feasibility
+│   │   ├── cpp-custom-objects-research.md # C++ SDK Research
+│   │   ├── visualarq-reverse-engineering.md
+│   │   ├── solidworks-configurations-research.md
+│   │   ├── per-instance-visibility-research.md
+│   │   ├── existing-solutions-research.md
+│   │   └── eto-ui-fixes.md
+│   ├── plans/                             # Sprint Planning
+│   │   └── SPRINT_PLAN.md                 # Aktiver Sprint Plan (Sprint 3-8+)
+│   ├── reports/                           # Reports
+│   └── archive/                           # ← ARCHIVIERTE DOCS (Phase 1, veraltet)
+│       └── README.md                      # Erklärt was archiviert wurde
 └── progress.txt                           # Task Tracker
 ```
+
+## Architektur-Kernkonzepte
+
+### Definition Cloning (VariantManager)
+- Original-Definition bleibt unverändert
+- Pro Visibility-State wird eine Variant-Definition erstellt (Geometrie ohne hidden Components)
+- Naming: `{OriginalName}__aov_{hash8}` (Assembly Outliner Variant)
+- Deduplizierung: gleiche States teilen eine Variant
+
+### ON_UserData (C++ Persistence)
+- `ON_AssemblyUserData` auf jedem Assembly-InstanceObject
+- Speichert: sourceDefinitionId, activeConfigName, configurations[]
+- Archive()=true → überlebt Save/Load
+- Round-trip safe ohne Plugin
+
+### Configurations
+- Named Visibility-Presets pro Instance
+- Vererbung: Parent → Derived
+- Implizite "Default" Config (alles sichtbar)
 
 ## Entwicklungs-Richtlinien
 
@@ -93,85 +93,31 @@ RhinoAssemblyOutliner/
 - Ein Klasse pro File
 
 ### RhinoCommon Patterns
-- Panel via `IPanel` Interface registrieren
-- Events in `PanelClosing()` unsubscriben (Memory Leaks!)
+- Panel via `IPanel` Interface
+- Events in `PanelClosing()` unsubscriben
 - `RhinoApp.InvokeOnUiThread()` für UI-Updates
-- Event-Debouncing für Performance (100ms Timer)
-
-### Block-Traversierung
-```csharp
-// Rekursiv durch verschachtelte Blöcke
-for (int i = 0; i < definition.ObjectCount; i++)
-{
-    var obj = definition.Object(i);
-    if (obj is InstanceObject nested)
-        ProcessBlock(nested.InstanceDefinition);  // Rekursion
-}
-```
-
-## Wichtige Klassen
-
-| Klasse | Sprache | Zweck |
-|--------|---------|-------|
-| `AssemblyTreeBuilder` | C# | Baut den hierarchischen Baum aus RhinoDoc |
-| `AssemblyOutlinerPanel` | C# | Dockbares Panel mit IPanel Interface |
-| `BlockInstanceNode` | C# | Repräsentiert eine Block-Instanz im Baum |
-| `AssemblyTreeItem` | C# | Eto TreeGridItem Wrapper |
-| `NativeApi` | C++ | Exportierte C API für Per-Instance Visibility (P/Invoke) |
+- Event-Debouncing (100ms Timer)
+- `BeginUndoRecord`/`EndUndoRecord` für multi-step Ops
 
 ## Commands
 
-- `AssemblyOutliner` - Öffnet das Panel
-- `AssemblyOutlinerRefresh` - Aktualisiert den Baum manuell
+- `AssemblyOutliner` — Öffnet das Panel
+- `AssemblyOutlinerRefresh` — Aktualisiert den Baum
 
 ## Build & Test
 
 ```bash
-# C# Plugin Build
-dotnet build
-
-# C++ Native DLL Build (benötigt Rhino 8 C++ SDK + MSVC v142 Toolset)
-MSBuild.exe src\RhinoAssemblyOutliner.native\RhinoAssemblyOutliner.native.vcxproj -p:Configuration=Release -p:Platform=x64
-
-# Tests
-dotnet test
-
-# In Rhino laden
-# Plugin-DLL + Native-DLL in denselben Ordner kopieren
+dotnet build          # C# Plugin
+dotnet test           # 97 xUnit Tests
 ```
 
-### Build-Voraussetzungen C++
-- Visual Studio mit MSVC v142 (VS 2019) Toolset
-- Rhino 8 C++ SDK (installiert unter `C:\Program Files\Rhino 8 SDK\`)
-- Windows 10 SDK
+C++ Native DLL: VS 2022 mit Rhino 8 C++ SDK.
 
-## Offene Design-Entscheidungen
+## Archivierte Dokumentation
 
-1. **Performance-Schwelle:** Ab wann Lazy Loading? (1000+ Nodes?)
-2. **Block Edit Integration:** Wie tief anbinden?
-3. **Mac-Kompatibilität:** Testen erforderlich
-
-## Ressourcen
-
-- [RhinoCommon API](https://developer.rhino3d.com/api/rhinocommon/)
-- [Eto.Forms Docs](http://pages.picoe.ca/docs/api/)
-- [Rhino Panel Sample](https://github.com/mcneel/rhino-developer-samples/tree/7/rhinocommon/cs/SampleCsEto)
+Alte Docs (DisplayConduit-Ansatz, Sprint 1+2 Reviews) in `docs/archive/`.  
+Siehe `docs/archive/README.md` für Details.
 
 ---
 
-## Multi-Agent Setup
-
-Dieses Projekt nutzt ein **Multi-Agent System** für effiziente Entwicklung. Jeder Agent hat spezialisierte Aufgaben.
-
-### Agent-Rollen
-
-| Agent | Rolle | Output |
-|-------|-------|--------|
-| Coordinator | Orchestration, Synthese, User-Kommunikation | Commits, `CLAUDE.md` |
-| Research | CAD-Industrie Analyse, Best Practices | `research/` |
-| Coder | Implementation, Bug-Fixes, Tests | `src/` |
-| Docs | Dokumentation, User Guides | `docs/`, root |
-
----
-
-*Siehe `progress.txt` für aktuelle Tasks.*
+*Siehe `ROADMAP.md` für die Projekt-Roadmap und `docs/plans/SPRINT_PLAN.md` für aktive Sprint-Planung.*

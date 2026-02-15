@@ -1,5 +1,6 @@
 using Rhino;
 using Rhino.PlugIns;
+using RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 
 namespace RhinoAssemblyOutliner;
 
@@ -64,5 +65,33 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     {
         // Clear the assembly tree when document closes
         RhinoApp.WriteLine("Document closed - Assembly tree cleared.");
+    }
+
+    /// <summary>
+    /// Called when the plugin is being unloaded.
+    /// Cleans up native resources.
+    /// </summary>
+    protected override void OnShutdown()
+    {
+        // Unsubscribe all event handlers to prevent event leaks on static events
+        RhinoDoc.BeginOpenDocument -= OnBeginOpenDocument;
+        RhinoDoc.EndOpenDocument -= OnEndOpenDocument;
+        RhinoDoc.CloseDocument -= OnCloseDocument;
+
+        // Clean up native DLL resources (conduit, vis data, event handler)
+        if (NativeVisibilityInterop.IsNativeDllAvailable())
+        {
+            try
+            {
+                NativeVisibilityInterop.NativeCleanup();
+                RhinoApp.WriteLine("AssemblyOutliner: Native module cleaned up.");
+            }
+            catch (System.Exception ex)
+            {
+                RhinoApp.WriteLine($"AssemblyOutliner: NativeCleanup failed: {ex.Message}");
+            }
+        }
+
+        base.OnShutdown();
     }
 }

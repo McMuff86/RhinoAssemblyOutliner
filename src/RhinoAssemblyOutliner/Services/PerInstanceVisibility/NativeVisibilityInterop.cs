@@ -8,6 +8,11 @@ namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 /// P/Invoke declarations for the C++ native visibility DLL.
 /// The native DLL must be placed next to the .rhp plugin file.
 /// API v2: uses dot-separated path strings instead of flat int indices.
+/// 
+/// B4 Note: System.Guid and ON_UUID (OpenNurbs) are binary-compatible — both are
+/// 16-byte structs with identical layout (uint32 + uint16 + uint16 + byte[8]).
+/// 'ref Guid' marshals as a pointer matching 'const ON_UUID*' on the C++ side.
+/// A static_assert in NativeApi.cpp validates sizeof(ON_UUID) == 16 at compile time.
 /// </summary>
 public static class NativeVisibilityInterop
 {
@@ -46,6 +51,46 @@ public static class NativeVisibilityInterop
 
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
     public static extern int GetNativeVersion();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern void PersistVisibilityState();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern void LoadVisibilityState();
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern int GetManagedInstances(
+        [In, Out] Guid[] buffer,
+        int maxCount
+    );
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsConduitEnabled();
+
+    /// <summary>
+    /// Set the state of a component within a block instance.
+    /// </summary>
+    /// <param name="instanceId">The block instance UUID.</param>
+    /// <param name="path">Dot-separated component path (e.g. "0", "1.0.2").</param>
+    /// <param name="state">0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent.</param>
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetComponentState(
+        ref Guid instanceId,
+        [MarshalAs(UnmanagedType.LPStr)] string path,
+        int state
+    );
+
+    /// <summary>
+    /// Get the state of a component within a block instance.
+    /// </summary>
+    /// <returns>0=Visible, 1=Hidden, 2=Suppressed, 3=Transparent.</returns>
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    public static extern int GetComponentState(
+        ref Guid instanceId,
+        [MarshalAs(UnmanagedType.LPStr)] string path
+    );
 
     /// <summary>
     /// Check if the native DLL exists next to the plugin.
