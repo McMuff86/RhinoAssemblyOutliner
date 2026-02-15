@@ -177,6 +177,15 @@ public class AssemblyTreeView : TreeGridView
                     ShowAllRequested?.Invoke(this, EventArgs.Empty);
                     e.Handled = true;
                 }
+                else if (e.Modifiers == Keys.Shift)
+                {
+                    // Shift+H → Show selected (SolidWorks convention)
+                    if (node != null)
+                    {
+                        ShowRequested?.Invoke(this, node);
+                        e.Handled = true;
+                    }
+                }
                 else if (e.Modifiers == Keys.None)
                 {
                     // H → Hide selected
@@ -192,15 +201,6 @@ public class AssemblyTreeView : TreeGridView
                 if (e.Modifiers == Keys.None && node != null)
                 {
                     // S → Show selected
-                    ShowRequested?.Invoke(this, node);
-                    e.Handled = true;
-                }
-                break;
-
-            case Keys.H when e.Modifiers == Keys.Shift:
-                if (node != null)
-                {
-                    // Shift+H → Show selected (SolidWorks convention)
                     ShowRequested?.Invoke(this, node);
                     e.Handled = true;
                 }
