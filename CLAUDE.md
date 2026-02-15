@@ -54,12 +54,14 @@ RhinoAssemblyOutliner/
 │   │   ├── Commands/                      # Rhino Commands
 │   │   │   ├── OpenOutlinerCommand.cs
 │   │   │   ├── RefreshOutlinerCommand.cs
-│   │   │   └── TestPerInstanceVisibilityCommand.cs
+│   │   │   ├── TestPerInstanceVisibilityCommand.cs
+│   │   │   └── TestNativeVisibilityCommand.cs
 │   │   └── Services/                      # Business Logic
 │   │       ├── SelectionSyncService.cs
 │   │       ├── VisibilityService.cs
 │   │       └── PerInstanceVisibility/     # C# PoC (wird durch C++ ersetzt)
 │   │           ├── ComponentVisibilityData.cs
+│   │           ├── NativeVisibilityInterop.cs
 │   │           ├── PerInstanceVisibilityConduit.cs
 │   │           └── PerInstanceVisibilityService.cs
 │   │
