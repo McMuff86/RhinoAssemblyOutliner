@@ -191,6 +191,29 @@ public class AssemblyTreeView : TreeGridView
                     e.Handled = true;
                 }
                 break;
+
+            case Keys.Escape:
+                // Esc → Exit isolate mode / show all
+                ShowAllRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+                break;
+
+            case Keys.Enter:
+                // Enter → Open BlockEdit on selected block instance
+                if (node is BlockInstanceNode bn && bn.InstanceId != Guid.Empty)
+                {
+                    // Select the instance first so BlockEdit targets it
+                    var doc = RhinoDoc.ActiveDoc;
+                    if (doc != null)
+                    {
+                        doc.Objects.UnselectAll();
+                        doc.Objects.Select(bn.InstanceId, true);
+                        doc.Views.Redraw();
+                    }
+                    RhinoApp.RunScript("_-BlockEdit", false);
+                    e.Handled = true;
+                }
+                break;
         }
     }
 
