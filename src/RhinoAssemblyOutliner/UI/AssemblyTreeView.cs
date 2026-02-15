@@ -495,7 +495,7 @@ public class AssemblyTreeView : TreeGridView
         var item = SelectedItem as AssemblyTreeItem;
         if (item != null)
         {
-            VisibilityToggleRequested?.Invoke(this, item.Node);
+            HideRequested?.Invoke(this, item.Node);
         }
     }
 
@@ -504,7 +504,7 @@ public class AssemblyTreeView : TreeGridView
         var item = SelectedItem as AssemblyTreeItem;
         if (item != null)
         {
-            VisibilityToggleRequested?.Invoke(this, item.Node);
+            ShowRequested?.Invoke(this, item.Node);
         }
     }
 
@@ -707,7 +707,8 @@ public class AssemblyTreeView : TreeGridView
         if (string.IsNullOrEmpty(_filterText))
         {
             // Show all
-            LoadTree(_rootNode);
+            if (_rootNode != null)
+                LoadTree(_rootNode);
         }
         else
         {
@@ -872,6 +873,7 @@ public class AssemblyTreeView : TreeGridView
         if (!item.Node.IsVisible)
         {
             e.ForegroundColor = Eto.Drawing.Colors.Gray;
+            if (e.Font == null) return;
             if (_hiddenFont == null || _hiddenFont.Family != e.Font.Family || _hiddenFont.Size != e.Font.Size)
             {
                 _hiddenFont?.Dispose();

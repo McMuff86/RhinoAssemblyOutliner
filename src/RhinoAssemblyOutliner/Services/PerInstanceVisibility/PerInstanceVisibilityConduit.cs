@@ -199,7 +199,7 @@ public class PerInstanceVisibilityConduit : DisplayConduit
     {
         var viewportMode = display.Viewport.DisplayMode;
         
-        if (viewportMode.EnglishName.ToLower().Contains("wireframe"))
+        if (viewportMode != null && viewportMode.EnglishName.ToLower().Contains("wireframe"))
         {
             display.DrawMeshWires(mesh, color);
         }
@@ -214,7 +214,7 @@ public class PerInstanceVisibilityConduit : DisplayConduit
     {
         var viewportMode = display.Viewport.DisplayMode;
 
-        if (viewportMode.EnglishName.ToLower().Contains("wireframe"))
+        if (viewportMode != null && viewportMode.EnglishName.ToLower().Contains("wireframe"))
         {
             display.DrawBrepWires(brep, color);
         }

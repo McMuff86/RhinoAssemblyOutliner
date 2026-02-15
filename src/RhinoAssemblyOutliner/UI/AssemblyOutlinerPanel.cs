@@ -40,6 +40,13 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     private int _needsRefresh; // 0 or 1, accessed via Interlocked
     private bool _isSyncingFromViewport;
     private bool _isSyncingFromTree;
+    
+    // Isolate mode state
+    private Panel _isolateBanner;
+    private Label _isolateBannerLabel;
+    private bool _isIsolated;
+    private string _isolatedNodeName = "";
+    private Dictionary<Guid, bool> _preIsolateVisibilityState = new();
 
     /// <summary>
     /// Gets the panel GUID for registration.
