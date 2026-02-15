@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Eto.Drawing;
 using Eto.Forms;
 using Rhino;
@@ -36,7 +37,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     // Event debouncing
     private Label _statusBar;
     private System.Timers.Timer _refreshTimer;
-    private bool _needsRefresh;
+    private int _needsRefresh; // 0 or 1, accessed via Interlocked
     private bool _isSyncingFromViewport;
     private bool _isSyncingFromTree;
 
@@ -485,7 +486,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     private void QueueRefresh()
     {
-        _needsRefresh = true;
+        Interlocked.Exchange(ref _needsRefresh, 1);
         _refreshTimer.Stop();
         _refreshTimer.Start();
     }
@@ -495,9 +496,8 @@ public class AssemblyOutlinerPanel : Panel, IPanel
     /// </summary>
     private void RefreshTreeDebounced()
     {
-        if (_needsRefresh)
+        if (Interlocked.CompareExchange(ref _needsRefresh, 0, 1) == 1)
         {
-            _needsRefresh = false;
             RhinoApp.InvokeOnUiThread((Action)RefreshTree);
         }
     }

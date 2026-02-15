@@ -64,6 +64,16 @@ public class AssemblyTreeView : TreeGridView
     /// </summary>
     public event EventHandler<AssemblyNode> ZoomToRequested;
 
+    /// <summary>
+    /// Raised when "Hide with Children" is requested.
+    /// </summary>
+    public event EventHandler<AssemblyNode> HideWithChildrenRequested;
+
+    /// <summary>
+    /// Raised when "Show with Children" is requested.
+    /// </summary>
+    public event EventHandler<AssemblyNode> ShowWithChildrenRequested;
+
     public AssemblyTreeView()
     {
         _itemLookup = new Dictionary<Guid, AssemblyTreeItem>();
@@ -276,6 +286,20 @@ public class AssemblyTreeView : TreeGridView
         var showAllItem = new ButtonMenuItem { Text = "Show All\tCtrl+Shift+H" };
         showAllItem.Click += (s, e) => ShowAllRequested?.Invoke(this, EventArgs.Empty);
 
+        var hideWithChildrenItem = new ButtonMenuItem { Text = "👁‍🗨 Hide with Children" };
+        hideWithChildrenItem.Click += (s, e) =>
+        {
+            var n = (SelectedItem as AssemblyTreeItem)?.Node;
+            if (n != null) HideWithChildrenRequested?.Invoke(this, n);
+        };
+
+        var showWithChildrenItem = new ButtonMenuItem { Text = "👁 Show with Children" };
+        showWithChildrenItem.Click += (s, e) =>
+        {
+            var n = (SelectedItem as AssemblyTreeItem)?.Node;
+            if (n != null) ShowWithChildrenRequested?.Invoke(this, n);
+        };
+
         var separator2 = new SeparatorMenuItem();
         
         var setAsRootItem = new ButtonMenuItem { Text = "📌 Set as Assembly Root" };
@@ -297,6 +321,8 @@ public class AssemblyTreeView : TreeGridView
         menu.Items.Add(showItem);
         menu.Items.Add(isolateItem);
         menu.Items.Add(showAllItem);
+        menu.Items.Add(hideWithChildrenItem);
+        menu.Items.Add(showWithChildrenItem);
         menu.Items.Add(separator2);
         menu.Items.Add(setAsRootItem);
         menu.Items.Add(separator3);
