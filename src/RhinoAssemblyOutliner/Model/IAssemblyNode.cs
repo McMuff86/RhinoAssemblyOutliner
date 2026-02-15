@@ -21,6 +21,6 @@ namespace RhinoAssemblyOutliner.Model
         IReadOnlyList<AssemblyNode> Children { get; }
 
         /// <summary>Parent node in the hierarchy.</summary>
-        AssemblyNode Parent { get; set; }
+        AssemblyNode? Parent { get; set; }
     }
 }
