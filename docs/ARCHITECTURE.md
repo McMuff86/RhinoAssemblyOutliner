@@ -1,4 +1,6 @@
-# Architecture Overview
+# Architecture Overview (V1 — C# Only)
+
+> **⚠️ This document covers the original C#-only architecture. For the current hybrid C++/C# architecture with Per-Instance Component Visibility, see [ARCHITECTURE_V2.md](ARCHITECTURE_V2.md).**
 
 This document describes the high-level architecture of the Rhino Assembly Outliner plugin.
 
