@@ -85,6 +85,8 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _treeView.HideRequested += OnHideRequested;
         _treeView.ShowRequested += OnShowRequested;
         _treeView.ZoomToRequested += OnZoomToRequested;
+        _treeView.HideWithChildrenRequested += OnHideWithChildrenRequested;
+        _treeView.ShowWithChildrenRequested += OnShowWithChildrenRequested;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -431,6 +433,22 @@ public class AssemblyOutlinerPanel : Panel, IPanel
                 blockNode.ZoomToInstance(doc);
             }
         }
+    }
+
+    private void OnHideWithChildrenRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Hide(node, includeChildren: true);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
+    }
+
+    private void OnShowWithChildrenRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Show(node, includeChildren: true);
+        _treeView.ReloadData();
+        UpdateStatusBar(_rootNode);
     }
 
     private void OnSetAsAssemblyRootRequested(object sender, BlockInstanceNode blockNode)
