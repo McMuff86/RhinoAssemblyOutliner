@@ -976,7 +976,13 @@ public class AssemblyTreeItem : TreeGridItem
         string layerName = "";
         string typeName = "";
 
-        if (node is BlockInstanceNode blockNode)
+        if (node is ComponentNode componentNode)
+        {
+            layerName = componentNode.Layer?.FullPath ?? "";
+            typeName = componentNode.GeometryType.ToString();
+            typeIcon = "🔹";  // Component icon
+        }
+        else if (node is BlockInstanceNode blockNode)
         {
             layerName = blockNode.Layer?.FullPath ?? "";
             typeName = blockNode.LinkType.ToString();

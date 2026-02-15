@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Rhino;
 using Rhino.DocObjects;
 using RhinoAssemblyOutliner.Model;
+using RhinoAssemblyOutliner.Services.Assembly;
 using RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 
 namespace RhinoAssemblyOutliner.Services;
@@ -40,31 +41,41 @@ public class VisibilityService
     /// <returns>The new visibility state.</returns>
     public bool ToggleVisibility(AssemblyNode node, bool includeChildren = false)
     {
-        if (node is BlockInstanceNode blockNode)
+        var doc = GetDoc();
+        if (doc == null) return node.IsVisible;
+
+        string desc = node.IsVisible
+            ? $"Hide {node.Name}"
+            : $"Show {node.Name}";
+
+        using (UndoHelper.CreateScope(doc, desc))
         {
-            // Component inside a block → use native per-instance visibility
-            if (IsComponentNode(blockNode))
+            if (node is BlockInstanceNode blockNode)
             {
-                return ToggleComponentVisibility(blockNode);
-            }
-
-            // Top-level instance → use standard Rhino show/hide
-            if (blockNode.InstanceId != Guid.Empty)
-            {
-                var obj = GetDoc()?.Objects.FindId(blockNode.InstanceId);
-                if (obj != null)
+                // Component inside a block → use native per-instance visibility
+                if (IsComponentNode(blockNode))
                 {
-                    bool newState = !IsVisible(obj);
-                    SetVisibility(obj, newState);
-                    node.IsVisible = newState;
+                    return ToggleComponentVisibility(blockNode);
+                }
 
-                    if (includeChildren)
+                // Top-level instance → use standard Rhino show/hide
+                if (blockNode.InstanceId != Guid.Empty)
+                {
+                    var obj = doc.Objects.FindId(blockNode.InstanceId);
+                    if (obj != null)
                     {
-                        SetChildrenVisibility(node, newState);
-                    }
+                        bool newState = !IsVisible(obj);
+                        SetVisibility(obj, newState);
+                        node.IsVisible = newState;
 
-                    GetDoc()?.Views.Redraw();
-                    return newState;
+                        if (includeChildren)
+                        {
+                            SetChildrenVisibility(node, newState);
+                        }
+
+                        doc.Views.Redraw();
+                        return newState;
+                    }
                 }
             }
         }
@@ -107,16 +118,19 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        // Hide all top-level block instances
-        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        using (UndoHelper.CreateScope(doc, $"Isolate {node.Name}"))
         {
-            SetVisibility(obj, false);
+            // Hide all top-level block instances
+            foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+            {
+                SetVisibility(obj, false);
+            }
+
+            // Show only the selected node and its ancestors
+            ShowNodeAndAncestors(node);
+
+            doc.Views.Redraw();
         }
-
-        // Show only the selected node and its ancestors
-        ShowNodeAndAncestors(node);
-
-        doc.Views.Redraw();
     }
 
     /// <summary>
@@ -127,24 +141,27 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
+        using (UndoHelper.CreateScope(doc, "Show All"))
         {
-            if (!IsVisible(obj))
+            foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
             {
-                SetVisibility(obj, true);
-            }
-
-            // Also reset any per-instance component visibility
-            if (_nativeInitialized)
-            {
-                var id = obj.Id;
-                if (NativeVisibilityInterop.GetHiddenComponentCount(ref id) > 0)
+                if (!IsVisible(obj))
                 {
-                    NativeVisibilityInterop.ResetComponentVisibility(ref id);
+                    SetVisibility(obj, true);
+                }
+
+                // Also reset any per-instance component visibility
+                if (_nativeInitialized)
+                {
+                    var id = obj.Id;
+                    if (NativeVisibilityInterop.GetHiddenComponentCount(ref id) > 0)
+                    {
+                        NativeVisibilityInterop.ResetComponentVisibility(ref id);
+                    }
                 }
             }
+            doc.Views.Redraw();
         }
-        doc.Views.Redraw();
     }
 
     /// <summary>
@@ -152,8 +169,14 @@ public class VisibilityService
     /// </summary>
     public void Hide(AssemblyNode node, bool includeChildren = true)
     {
-        SetVisibility(node, false, includeChildren);
-        GetDoc()?.Views.Redraw();
+        var doc = GetDoc();
+        if (doc == null) return;
+
+        using (UndoHelper.CreateScope(doc, $"Hide {node.Name}"))
+        {
+            SetVisibilityInternal(node, false, includeChildren);
+            doc.Views.Redraw();
+        }
     }
 
     /// <summary>
@@ -161,8 +184,14 @@ public class VisibilityService
     /// </summary>
     public void Show(AssemblyNode node, bool includeChildren = true)
     {
-        SetVisibility(node, true, includeChildren);
-        GetDoc()?.Views.Redraw();
+        var doc = GetDoc();
+        if (doc == null) return;
+
+        using (UndoHelper.CreateScope(doc, $"Show {node.Name}"))
+        {
+            SetVisibilityInternal(node, true, includeChildren);
+            doc.Views.Redraw();
+        }
     }
 
     #region Native Per-Instance Visibility

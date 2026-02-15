@@ -1,5 +1,7 @@
+using System;
 using Rhino;
 using Rhino.PlugIns;
+using RhinoAssemblyOutliner.Services.Assembly;
 using RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 
 namespace RhinoAssemblyOutliner;
@@ -16,6 +18,12 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     /// </summary>
     public static RhinoAssemblyOutlinerPlugin? Instance { get; private set; }
 
+    /// <summary>Garbage collector for orphaned variant definitions.</summary>
+    private VariantGarbageCollector? _garbageCollector;
+
+    /// <summary>Event handler for assembly-related document events.</summary>
+    private AssemblyEventHandler? _assemblyEventHandler;
+
     /// <summary>
     /// Plugin constructor.
     /// </summary>
@@ -23,6 +31,12 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     {
         Instance = this;
     }
+
+    /// <summary>Exposes the garbage collector for external use.</summary>
+    public IVariantGarbageCollector? GarbageCollector => _garbageCollector;
+
+    /// <summary>Exposes the event handler for external subscription.</summary>
+    public AssemblyEventHandler? AssemblyEventHandler => _assemblyEventHandler;
 
     /// <summary>
     /// Called when the plugin is being loaded.
@@ -32,6 +46,11 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
         RhinoApp.WriteLine("RhinoAssemblyOutliner plugin loaded.");
         
         // Panel is registered in OpenOutlinerCommand constructor
+
+        // --- Sprint 3: Assembly lifecycle services ---
+        _garbageCollector = new VariantGarbageCollector();
+        _assemblyEventHandler = new AssemblyEventHandler(_garbageCollector);
+        _assemblyEventHandler.Subscribe();
         
         // Register event handlers for document changes
         RhinoDoc.BeginOpenDocument += OnBeginOpenDocument;
@@ -69,10 +88,17 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
 
     /// <summary>
     /// Called when the plugin is being unloaded.
-    /// Cleans up native resources.
+    /// Cleans up native resources and unsubscribes all events.
     /// </summary>
     protected override void OnShutdown()
     {
+        // --- Sprint 3: Clean up assembly lifecycle services ---
+        _assemblyEventHandler?.Dispose();
+        _assemblyEventHandler = null;
+
+        _garbageCollector?.Dispose();
+        _garbageCollector = null;
+
         // Unsubscribe all event handlers to prevent event leaks on static events
         RhinoDoc.BeginOpenDocument -= OnBeginOpenDocument;
         RhinoDoc.EndOpenDocument -= OnEndOpenDocument;
@@ -86,7 +112,7 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
                 NativeVisibilityInterop.NativeCleanup();
                 RhinoApp.WriteLine("AssemblyOutliner: Native module cleaned up.");
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 RhinoApp.WriteLine($"AssemblyOutliner: NativeCleanup failed: {ex.Message}");
             }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Rhino;
 using Rhino.DocObjects;
+using RhinoAssemblyOutliner.Services.Assembly;
 
 namespace RhinoAssemblyOutliner.Model;
 
@@ -180,6 +181,10 @@ public class AssemblyTreeBuilder
         var definition = instance.InstanceDefinition;
         if (definition == null || definition.IsDeleted) return null;
 
+        // Filter out variant definitions (__aov_*) — they are internal implementation details
+        if (definition.Name.StartsWith(VariantManager.VariantPrefix, StringComparison.Ordinal))
+            return null;
+
         // Prevent infinite recursion from circular/self-referencing block definitions
         if (depth > MaxRecursionDepth)
         {
@@ -240,6 +245,9 @@ public class AssemblyTreeBuilder
         var objects = definition.GetObjects();
         if (objects == null || objects.Length == 0) return;
 
+        // Resolve the owner instance ID (top-level instance that owns this tree branch)
+        var ownerInstanceId = ResolveOwnerInstanceId(parentNode);
+
         for (int i = 0; i < objects.Length; i++)
         {
             var obj = objects[i];
@@ -249,6 +257,12 @@ public class AssemblyTreeBuilder
             {
                 if (obj is InstanceObject nestedInstance)
                 {
+                    // Filter out nested variant definitions
+                    if (nestedInstance.InstanceDefinition != null &&
+                        nestedInstance.InstanceDefinition.Name.StartsWith(
+                            VariantManager.VariantPrefix, StringComparison.Ordinal))
+                        continue;
+
                     var childNode = CreateBlockInstanceNode(nestedInstance, depth);
                     if (childNode != null)
                     {
@@ -256,14 +270,37 @@ public class AssemblyTreeBuilder
                         parentNode.AddChild(childNode);
                     }
                 }
-                // Note: For MVP, we skip loose geometry inside blocks
-                // This can be extended to include GeometryNode in future iterations
+                else
+                {
+                    // Non-instance geometry → ComponentNode with eye-icon
+                    var componentNode = new ComponentNode(obj, i, definition.Id, _doc)
+                    {
+                        OwnerInstanceId = ownerInstanceId
+                    };
+                    parentNode.AddChild(componentNode);
+                }
             }
             catch (Exception ex)
             {
                 RhinoApp.WriteLine($"AssemblyOutliner: Error processing nested object: {ex.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// Walks up the node tree to find the top-level instance ID (for VariantManager calls).
+    /// </summary>
+    private static Guid ResolveOwnerInstanceId(BlockInstanceNode node)
+    {
+        var current = node;
+        while (current != null)
+        {
+            // Top-level instance has ComponentIndex == -1 (not nested)
+            if (current.ComponentIndex < 0 && current.InstanceId != Guid.Empty)
+                return current.InstanceId;
+            current = current.Parent as BlockInstanceNode;
+        }
+        return node.InstanceId;
     }
 
     /// <summary>
