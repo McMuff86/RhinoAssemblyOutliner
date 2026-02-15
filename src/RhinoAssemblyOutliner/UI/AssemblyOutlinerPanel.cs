@@ -647,6 +647,10 @@ public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
         if (_visibilityService == null || _visibilityServiceDocSerial != doc.RuntimeSerialNumber)
         {
             _visibilityService = new VisibilityService(doc);
+            _visibilityService.TreeRefreshNeeded += () =>
+            {
+                RhinoApp.InvokeOnUiThread((Action)(() => RefreshTree()));
+            };
             _visibilityServiceDocSerial = doc.RuntimeSerialNumber;
         }
     }

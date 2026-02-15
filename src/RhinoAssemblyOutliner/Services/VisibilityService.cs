@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Rhino;
 using Rhino.DocObjects;
 using RhinoAssemblyOutliner.Model;
@@ -17,11 +18,18 @@ public class VisibilityService
 {
     private readonly uint _docSerialNumber;
     private bool _nativeInitialized;
+    private readonly IVariantManager _variantManager;
 
-    public VisibilityService(RhinoDoc doc)
+    /// <summary>
+    /// Raised after a variant reassignment so the UI can refresh.
+    /// </summary>
+    public event Action TreeRefreshNeeded;
+
+    public VisibilityService(RhinoDoc doc, IVariantManager variantManager = null)
     {
         if (doc == null) throw new ArgumentNullException(nameof(doc));
         _docSerialNumber = doc.RuntimeSerialNumber;
+        _variantManager = variantManager ?? new VariantManager();
         InitializeNative();
     }
 
@@ -43,6 +51,12 @@ public class VisibilityService
     {
         var doc = GetDoc();
         if (doc == null) return node.IsVisible;
+
+        // ComponentNode: toggle via VariantManager (definition cloning)
+        if (node is ComponentNode compNode)
+        {
+            return ToggleComponentNodeVisibility(compNode, doc);
+        }
 
         string desc = node.IsVisible
             ? $"Hide {node.Name}"
@@ -83,10 +97,34 @@ public class VisibilityService
     }
 
     /// <summary>
-    /// Sets visibility state for a node.
+    /// Sets visibility state for a node (wraps in undo record).
     /// </summary>
     public void SetVisibility(AssemblyNode node, bool visible, bool includeChildren = false)
     {
+        var doc = GetDoc();
+        if (doc == null) return;
+
+        string desc = visible ? $"Show {node.Name}" : $"Hide {node.Name}";
+        using (UndoHelper.CreateScope(doc, desc))
+        {
+            SetVisibilityInternal(node, visible, includeChildren);
+        }
+    }
+
+    /// <summary>
+    /// Internal: sets visibility without creating its own undo record.
+    /// Caller is responsible for undo scoping.
+    /// </summary>
+    private void SetVisibilityInternal(AssemblyNode node, bool visible, bool includeChildren = false)
+    {
+        if (node is ComponentNode compNode)
+        {
+            var doc = GetDoc();
+            if (doc != null)
+                ApplyComponentVisibility(compNode, visible, doc);
+            return;
+        }
+
         if (node is BlockInstanceNode blockNode)
         {
             if (IsComponentNode(blockNode))
@@ -193,6 +231,91 @@ public class VisibilityService
             doc.Views.Redraw();
         }
     }
+
+    #region Component Node Visibility (via VariantManager / Definition Cloning)
+
+    /// <summary>
+    /// Toggles visibility of a ComponentNode via the VariantManager.
+    /// Builds a VisibilityState from all sibling components and reassigns the owning instance.
+    /// </summary>
+    private bool ToggleComponentNodeVisibility(ComponentNode compNode, RhinoDoc doc)
+    {
+        bool newVisible = !compNode.IsVisible;
+        
+        using (UndoHelper.CreateScope(doc, newVisible ? $"Show {compNode.DisplayName}" : $"Hide {compNode.DisplayName}"))
+        {
+            ApplyComponentVisibility(compNode, newVisible, doc);
+        }
+
+        return newVisible;
+    }
+
+    /// <summary>
+    /// Applies visibility change on a ComponentNode by building the full VisibilityState
+    /// from all sibling components and calling VariantManager.ReassignInstance().
+    /// </summary>
+    private void ApplyComponentVisibility(ComponentNode compNode, bool visible, RhinoDoc doc)
+    {
+        // Update the node state first
+        compNode.IsVisible = visible;
+
+        // Find the parent BlockInstanceNode
+        var parentBlock = compNode.Parent as BlockInstanceNode;
+        if (parentBlock == null) return;
+
+        // Find the source definition
+        var instanceObj = doc.Objects.FindId(compNode.OwnerInstanceId) as InstanceObject;
+        if (instanceObj == null) return;
+
+        var currentDefId = instanceObj.InstanceDefinition.Id;
+        var sourceDefId = _variantManager.GetSourceDefinitionId(doc, currentDefId) ?? currentDefId;
+        var sourceDef = doc.InstanceDefinitions.FindId(sourceDefId);
+        if (sourceDef == null) return;
+
+        // Build VisibilityState from all sibling ComponentNodes
+        var allComponents = parentBlock.Children;
+        int componentCount = sourceDef.GetObjects().Length;
+        var hiddenIndices = new List<int>();
+
+        foreach (var child in allComponents)
+        {
+            if (child is ComponentNode cn && !cn.IsVisible)
+            {
+                hiddenIndices.Add(cn.ComponentIndex);
+            }
+        }
+
+        var state = VisibilityState.Create(hiddenIndices, componentCount);
+
+        // Reassign via VariantManager
+        _variantManager.ReassignInstance(doc, compNode.OwnerInstanceId, state);
+
+        // Update parent mixed state
+        UpdateParentVisibilityState(parentBlock);
+
+        doc.Views.Redraw();
+        TreeRefreshNeeded?.Invoke();
+    }
+
+    /// <summary>
+    /// Updates the parent node's IsVisible based on children (for mixed state display).
+    /// If all children are visible → parent visible. If all hidden → parent hidden.
+    /// Mixed → parent stays visible (the UI shows ◐ based on children check).
+    /// </summary>
+    private void UpdateParentVisibilityState(AssemblyNode parent)
+    {
+        if (parent.Children.Count == 0) return;
+
+        bool allVisible = parent.Children.All(c => c.IsVisible);
+        bool allHidden = parent.Children.All(c => !c.IsVisible);
+
+        if (allHidden)
+            parent.IsVisible = false;
+        else
+            parent.IsVisible = true;
+    }
+
+    #endregion
 
     #region Native Per-Instance Visibility
 
