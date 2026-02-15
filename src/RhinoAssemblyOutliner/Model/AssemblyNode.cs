@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Rhino.DocObjects;
 
 namespace RhinoAssemblyOutliner.Model;
@@ -27,7 +26,7 @@ public abstract class AssemblyNode
     /// <summary>
     /// Child nodes contained within this node.
     /// </summary>
-    public ObservableCollection<AssemblyNode> Children { get; }
+    public List<AssemblyNode> Children { get; }
 
     /// <summary>
     /// Indicates whether this node is currently visible in the viewport.
@@ -62,7 +61,7 @@ public abstract class AssemblyNode
     {
         Id = id;
         DisplayName = displayName;
-        Children = new ObservableCollection<AssemblyNode>();
+        Children = new List<AssemblyNode>();
     }
 
     /// <summary>
