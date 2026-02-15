@@ -66,12 +66,27 @@ Wir bauen den **fehlenden hierarchischen Instanz-Baum** für Rhino.
 - Layer-Zuordnung pro Instanz
 - Link-Typ Anzeige (Embedded, Linked, EmbeddedAndLinked)
 - Suchfilter im Baum
+- Status Bar: Instanzen, Definitionen, versteckte Objekte
 
 **Interaktion**
 - Bidirektionale Selektion: Baum ↔ Viewport
 - Sichtbarkeits-Toggle pro Eintrag (Auge-Icon)
-- Kontextmenü: Selektieren, Isolieren, Ausblenden, Block Editieren, Zoom
+- Mixed-State Eye-Icon (◐) bei teilweise versteckten Kindern
+- Kontextmenü: Selektieren, Isolieren, Ausblenden, Block Editieren, Zoom (strukturiert nach Kategorien)
 - "Alle gleichen selektieren" (alle Instanzen einer Definition)
+- Show/Hide with Dependents (rekursiv)
+- Isolate-Modus mit Banner, Exit-Button, Esc zum Beenden
+- Doppelklick → BlockEdit
+- Drag & Drop Reorder (Top-Level Items)
+- Keyboard Shortcuts: H (Hide), S (Show), I (Isolate), Space (Show All), F (Zoom), Del (Delete), Enter (BlockEdit)
+- Collapse All / Expand All Toolbar-Buttons
+
+**Per-Instance Component Visibility (v2.0, in Arbeit)**
+- C++ DisplayConduit für SC_DRAWOBJECT Interception
+- Pfad-basierte Komponentenfilterung (z.B. "1.0.2")
+- ON_UserData Persistenz in .3dm Dateien
+- Automatische Sync bei Document Open/Save/Close
+- P/Invoke Bridge (12 native Funktionen)
 
 ---
 

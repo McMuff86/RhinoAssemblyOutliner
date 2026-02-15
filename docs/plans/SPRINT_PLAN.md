@@ -6,9 +6,10 @@ Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance co
 
 ---
 
-## Sprint 1: v1.0-rc — UX Polish (C# only)
+## Sprint 1: v1.0-rc — UX Polish (C# only) ✅ DONE
 
 **Duration:** 1 week  
+**Status:** ✅ COMPLETED (2026-02-15)  
 **Goal:** All TT1 quick wins implemented. Plugin feels professional.
 
 | # | Task | Effort | Depends On | Acceptance Criteria |
@@ -27,11 +28,17 @@ Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance co
 
 **Total estimated: ~16 hours**
 
+**Sprint 1 Deliverables:**
+- All 11 tasks completed and reviewed
+- Refactoring checklist items 1-3 done (stable node IDs, doc reference leak fix, ObservableCollection removal)
+- Code review passed (see `docs/plans/REVIEW_SPRINT1.md`)
+
 ---
 
-## Sprint 2: v1.0 — Release
+## Sprint 2: v1.0 — Release (~40% complete)
 
 **Duration:** 1 week  
+**Status:** 🔄 IN PROGRESS (~40%)  
 **Goal:** Stable release on Yak package manager.
 
 | # | Task | Effort | Depends On | Acceptance Criteria |
@@ -51,10 +58,20 @@ Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance co
 
 ---
 
-## Sprint 3: v2.0-alpha — C++ Validation
+## Sprint 3: v2.0-alpha — C++ Validation (started early)
 
 **Duration:** 2 weeks  
+**Status:** 🔄 IN PROGRESS — C++ foundation built ahead of schedule  
 **Goal:** Confirm SC_DRAWOBJECT approach works for blocks. This is the #1 project risk.
+
+**Early progress (done during Sprint 1/2 refactoring):**
+- ✅ 3.1: C++ SDK setup, VS project, build config (`build-native.ps1`), PlatformToolset v143
+- ✅ 3.5: `CComponentVisibilityData` ON_UserData with chunked Write/Read serialization
+- ✅ 3.6: P/Invoke bridge — all 12 extern C functions implemented, NativeApi.h/.cpp complete
+- ✅ DocEventHandler: auto-sync on open/save/close/delete (not in original sprint plan)
+- ✅ VisibilityConduit: SC_DRAWOBJECT interception with path-based filtering + nested block recursion
+- ⏳ 3.2-3.4: Validation testing in Rhino (pending Windows build + runtime test)
+- ⏳ 3.7: End-to-end integration smoke test
 
 | # | Task | Effort | Depends On | Acceptance Criteria |
 |---|------|--------|-----------|-------------------|
@@ -97,7 +114,7 @@ Ship v1.0 C#-only with polished UX (quick wins). Then tackle C++ per-instance co
 
 | Milestone | Date (est.) | Deliverable |
 |-----------|------------|-------------|
-| v1.0-rc | Week 1 end | All quick wins, polished C# plugin |
-| v1.0 | Week 2 end | Yak release, tested, documented |
-| v2.0-alpha | Week 4 end | C++ validated, P/Invoke working |
+| v1.0-rc | Week 1 end | ✅ All quick wins, polished C# plugin |
+| v1.0 | Week 2 end | 🔄 ~40% — bug bash, tests, packaging |
+| v2.0-alpha | Week 4 end | 🔄 C++ foundation built, validation pending |
 | v2.0 | Week 6 end | Full component visibility, Yak v2 release |

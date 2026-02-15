@@ -89,13 +89,15 @@ Search for **RhinoAssemblyOutliner** and install.
 ## Roadmap
 
 ### v1.0 — Current
-- Full assembly tree with visibility control, isolate mode, keyboard shortcuts, assembly mode, search, detail panel, and selection sync.
+- Full assembly tree with visibility control, isolate mode, keyboard shortcuts, assembly mode, search, detail panel, selection sync, drag-drop reorder, status bar, mixed-state eye icons, context menu with visibility/selection/navigation/editing sections.
 
-### v2.0 — Per-Instance Component Visibility
-- **C++ DisplayConduit** intercepting `SC_DRAWOBJECT` for per-component draw control
+### v2.0 — Per-Instance Component Visibility (in progress)
+- **C++ DisplayConduit** intercepting `SC_DRAWOBJECT` for per-component draw control ✅ built
 - Hide individual components within a single block instance (not all instances of that definition)
-- `ON_UserData` persistence — hidden component state saved in `.3dm` files
-- P/Invoke bridge between C# plugin and native C++ conduit
+- `ON_UserData` persistence — hidden component state saved in `.3dm` files ✅ built
+- P/Invoke bridge with 12 native API functions ✅ built
+- Document event handling (auto-sync on open/save/close) ✅ built
+- Path-based component addressing for nested blocks ✅ built
 - Performance target: >30 fps with 100+ managed instances
 
 ---
