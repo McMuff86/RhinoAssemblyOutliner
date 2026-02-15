@@ -6,6 +6,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] - Sprint 2 Complete + Architecture v3
+
+### Added
+- Per-Instance Component Visibility Architecture v3 (Definition Cloning)
+- Custom C++ Object Research (CRhinoBrepObject + ON_UserData + Custom Grips)
+- VisualARQ Reverse Engineering Study
+- SolidWorks Configuration System Analysis
+- Product Vision v2 ("BlockForge")
+- Assembly Object Architecture Design
+- Custom Object Feasibility Study + Prototype Code
+- User Guide with 46-point testing checklist
+- 97 new unit tests (8 test files)
+- Plugin icons (256/48/24px)
+- GitHub Actions CI workflow
+- Eto UI column sizing fixes
+
+### Changed
+- Removed C# DisplayConduit (C++ conduit only → will be replaced by Definition Cloning)
+- Yak build script improved (native DLL bundling, version override, icon)
+- All 5 review blockers fixed (B1-B5)
+- Documentation audit fixes (README, CLAUDE.md, CONTRIBUTING, ARCHITECTURE)
+
+### Architecture Decision
+- **DisplayConduit approach abandoned** — Rhino renders block instances atomically
+- **New approach: Definition Cloning + ON_UserData + Custom Grips (C++)**
+- Inspired by VisualARQ architecture (Standard geometry + UserData)
+
+---
+
 ## [2.0.0-alpha.2] — 2026-02-15
 
 ### Added
