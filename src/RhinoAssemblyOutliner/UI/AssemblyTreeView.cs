@@ -27,7 +27,7 @@ public class AssemblyTreeView : TreeGridView
     /// <summary>
     /// Raised when selection changes.
     /// </summary>
-    public new event EventHandler<AssemblyNode> SelectionChanged;
+    public event EventHandler<AssemblyNode> NodeSelectionChanged;
 
     /// <summary>
     /// Raised when a node is activated (double-clicked).
@@ -237,6 +237,22 @@ public class AssemblyTreeView : TreeGridView
                 // Esc → Exit isolate mode / show all
                 ShowAllRequested?.Invoke(this, EventArgs.Empty);
                 e.Handled = true;
+                break;
+
+            case Keys.Up:
+                if (e.Modifiers == Keys.Control && node != null)
+                {
+                    MoveSelectedItem(-1);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.Down:
+                if (e.Modifiers == Keys.Control && node != null)
+                {
+                    MoveSelectedItem(+1);
+                    e.Handled = true;
+                }
                 break;
 
             case Keys.Enter:
@@ -765,6 +781,37 @@ public class AssemblyTreeView : TreeGridView
         return null;
     }
 
+    /// <summary>
+    /// Moves the selected top-level item up (-1) or down (+1) in the tree.
+    /// Reliable alternative to drag-drop reordering.
+    /// </summary>
+    private void MoveSelectedItem(int direction)
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        if (item == null) return;
+
+        var parentItem = item.Parent as AssemblyTreeItem;
+        if (parentItem?.Node is not DocumentNode root) return;
+
+        int fromIndex = root.Children.IndexOf(item.Node);
+        int toIndex = fromIndex + direction;
+        if (fromIndex < 0 || toIndex < 0 || toIndex >= root.Children.Count) return;
+
+        // Reorder in model
+        var child = root.Children[fromIndex];
+        root.Children.RemoveAt(fromIndex);
+        root.Children.Insert(toIndex, child);
+
+        // Reload tree UI and re-select
+        LoadTree(_rootNode);
+
+        // Re-select the moved item
+        if (_itemLookup.TryGetValue(child.Id, out var newItem))
+            SelectedItem = newItem;
+
+        ItemReordered?.Invoke(this, (fromIndex, toIndex));
+    }
+
     #region Drag & Drop Reorder
 
     private void OnMouseDown(object sender, MouseEventArgs e)
@@ -795,7 +842,10 @@ public class AssemblyTreeView : TreeGridView
 
     private void OnDragOver(object sender, DragEventArgs e)
     {
-        // Allow drop only on top-level siblings
+        // LIMITATION: Eto's TreeGridView does not expose hit-testing (GetCellAt) in
+        // DragEventArgs, so we fall back to SelectedItem as the drop target. This means
+        // the drop target is the *selected* row, not necessarily the row under the cursor.
+        // For reliable reordering, prefer Ctrl+Up / Ctrl+Down keyboard shortcuts instead.
         var targetItem = SelectedItem as AssemblyTreeItem;
         if (targetItem != null)
         {
@@ -811,6 +861,7 @@ public class AssemblyTreeView : TreeGridView
 
     private void OnDragDrop(object sender, DragEventArgs e)
     {
+        // See OnDragOver for known limitation regarding drop target accuracy.
         var targetItem = SelectedItem as AssemblyTreeItem;
         if (targetItem == null) return;
 
@@ -851,7 +902,7 @@ public class AssemblyTreeView : TreeGridView
     private void OnSelectedItemChanged(object sender, EventArgs e)
     {
         var item = SelectedItem as AssemblyTreeItem;
-        SelectionChanged?.Invoke(this, item?.Node);
+        NodeSelectionChanged?.Invoke(this, item?.Node);
     }
 
     private void OnActivated(object sender, EventArgs e)

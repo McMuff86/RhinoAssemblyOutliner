@@ -91,7 +91,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
         // Tree view (main content)
         _treeView = new AssemblyTreeView();
         _treeView.GetDoc = GetDoc;
-        _treeView.SelectionChanged += OnTreeSelectionChanged;
+        _treeView.NodeSelectionChanged += OnTreeSelectionChanged;
         _treeView.NodeActivated += OnTreeNodeActivated;
         _treeView.VisibilityToggleRequested += OnVisibilityToggleRequested;
         _treeView.IsolateRequested += OnIsolateRequested;

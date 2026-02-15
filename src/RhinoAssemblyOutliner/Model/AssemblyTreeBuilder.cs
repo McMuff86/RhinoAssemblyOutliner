@@ -180,10 +180,16 @@ public class AssemblyTreeBuilder
         var definition = instance.InstanceDefinition;
         if (definition == null || definition.IsDeleted) return null;
 
-        // Prevent infinite recursion (self-referencing blocks)
+        // Prevent infinite recursion from circular/self-referencing block definitions
         if (depth > MaxRecursionDepth)
         {
             RhinoApp.WriteLine($"AssemblyOutliner: Max recursion depth reached for block '{definition.Name}'");
+            return null;
+        }
+
+        if (!_visitedDefinitions.Add(definition.Index))
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Circular reference detected for block '{definition.Name}', skipping.");
             return null;
         }
 
@@ -214,6 +220,9 @@ public class AssemblyTreeBuilder
 
         // Recursively process nested blocks within this definition
         ProcessDefinitionContents(node, definition, depth + 1);
+
+        // Remove from visited so sibling instances of the same definition can be processed
+        _visitedDefinitions.Remove(definition.Index);
 
         return node;
     }
