@@ -8,6 +8,7 @@ using Rhino.Geometry;
 
 namespace RhinoAssemblyOutliner.Services.PerInstanceVisibility;
 
+// TODO: C# Conduit is a fallback; C++ Conduit takes priority when native DLL is loaded.
 /// <summary>
 /// DisplayConduit that enables per-instance component visibility.
 /// 
