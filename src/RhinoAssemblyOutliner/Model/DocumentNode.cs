@@ -43,11 +43,22 @@ public class DocumentNode : AssemblyNode
     /// </summary>
     /// <param name="doc">The Rhino document.</param>
     public DocumentNode(RhinoDoc doc) 
-        : base(GetDocumentDisplayName(doc))
+        : base(GuidFromSerialNumber(doc.RuntimeSerialNumber), GetDocumentDisplayName(doc))
     {
         DocumentSerialNumber = doc.RuntimeSerialNumber;
         FilePath = string.IsNullOrEmpty(doc.Path) ? null : doc.Path;
         IsModified = doc.Modified;
+    }
+
+    /// <summary>
+    /// Creates a deterministic GUID from a document serial number.
+    /// </summary>
+    private static Guid GuidFromSerialNumber(uint serialNumber)
+    {
+        var bytes = new byte[16];
+        BitConverter.GetBytes(serialNumber).CopyTo(bytes, 0);
+        bytes[15] = 0xD0; // "DOcument" marker
+        return new Guid(bytes);
     }
 
     /// <summary>

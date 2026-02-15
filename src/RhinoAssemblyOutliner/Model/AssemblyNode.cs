@@ -58,9 +58,9 @@ public abstract class AssemblyNode
     /// Creates a new assembly node.
     /// </summary>
     /// <param name="displayName">Display name for the node.</param>
-    protected AssemblyNode(string displayName)
+    protected AssemblyNode(Guid id, string displayName)
     {
-        Id = Guid.NewGuid();
+        Id = id;
         DisplayName = displayName;
         Children = new ObservableCollection<AssemblyNode>();
     }

@@ -371,20 +371,14 @@ public class AssemblyTreeView : TreeGridView
 
     /// <summary>
     /// Selects a node by its Rhino object ID.
+    /// Since AssemblyNode.Id now equals the Rhino object ID, this is O(1).
     /// </summary>
     public void SelectNodeByObjectId(Guid objectId)
     {
-        // Find the node
-        var blockNode = AssemblyTreeBuilder.FindNodeByObjectId(_rootNode, objectId);
-        if (blockNode == null) return;
-
-        // Find the tree item
-        if (_itemLookup.TryGetValue(blockNode.Id, out var item))
+        // Direct O(1) lookup — node Id matches Rhino object Id
+        if (_itemLookup.TryGetValue(objectId, out var item))
         {
-            // Expand parents
             ExpandToItem(item);
-
-            // Select the item
             SelectedItem = item;
         }
     }
