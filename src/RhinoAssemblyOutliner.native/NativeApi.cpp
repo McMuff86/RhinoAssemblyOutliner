@@ -149,19 +149,19 @@ void __stdcall PersistVisibilityState()
 
 	for (const auto& instanceId : managedIds)
 	{
-		const CRhinoObject* pObject = pDoc->LookupObjectByUuid(instanceId);
+		const CRhinoObject* pObject = pDoc->LookupObject(instanceId);
 		if (!pObject || pObject->ObjectType() != ON::instance_reference)
 			continue;
 
-		ON_Geometry* pGeomCopy = pObject->Geometry()->Duplicate();
-		if (!pGeomCopy)
-			continue;
+		// Attach UserData to the object's attributes for persistence
+		ON_3dmObjectAttributes newAttrs = pObject->Attributes();
 
+		// Remove existing visibility userdata if present
 		CComponentVisibilityData* pExisting = CComponentVisibilityData::Cast(
-			pGeomCopy->GetUserData(VisibilityUserDataId));
+			newAttrs.GetUserData(VisibilityUserDataId));
 		if (pExisting)
 		{
-			pGeomCopy->DetachUserData(pExisting);
+			newAttrs.DetachUserData(pExisting);
 			delete pExisting;
 		}
 
@@ -170,7 +170,7 @@ void __stdcall PersistVisibilityState()
 
 		if (!pUD->HiddenPaths.empty())
 		{
-			if (!pGeomCopy->AttachUserData(pUD))
+			if (!newAttrs.AttachUserData(pUD))
 				delete pUD;
 		}
 		else
@@ -178,8 +178,7 @@ void __stdcall PersistVisibilityState()
 			delete pUD;
 		}
 
-		pDoc->ReplaceObject(CRhinoObjRef(pObject), *pGeomCopy);
-		delete pGeomCopy;
+		pDoc->ModifyObjectAttributes(CRhinoObjRef(pObject), newAttrs);
 	}
 }
 
@@ -205,7 +204,7 @@ void __stdcall LoadVisibilityState()
 
 		const ON_UUID instanceId = pObject->Attributes().m_uuid;
 		CComponentVisibilityData* pUD = CComponentVisibilityData::Cast(
-			pObject->Geometry()->GetUserData(VisibilityUserDataId));
+			pObject->Attributes().GetUserData(VisibilityUserDataId));
 
 		if (pUD && !pUD->HiddenPaths.empty())
 		{

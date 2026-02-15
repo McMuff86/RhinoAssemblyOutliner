@@ -133,8 +133,9 @@ bool CVisibilityConduit::ExecConduit(
 	// Selection highlight: if instance is selected, draw yellow wireframe overlay
 	if (pObject->IsSelected())
 	{
-		CRhinoDisplayPipeline_OGL* pOGL = dynamic_cast<CRhinoDisplayPipeline_OGL*>(&dp);
-		ON_Color selColor = RhinoApp().AppSettings().SelectedObjectColor();
+		// Selection highlight: draw visible components again as wireframe
+		// using Rhino's selection color
+		ON_Color selColor(255, 255, 0); // Yellow selection wireframe
 
 		for (int i = 0; i < componentCount; i++)
 		{
@@ -146,7 +147,55 @@ bool CVisibilityConduit::ExecConduit(
 			if (!pComp || !pComp->IsVisible())
 				continue;
 
-			dp.DrawWireframeObject(pComp, selColor, &instanceXform);
+			// Draw wireframe edges with selection color
+			const ON_Geometry* pGeom = pComp->Geometry();
+			if (!pGeom)
+				continue;
+
+			const ON_Brep* pBrep = ON_Brep::Cast(pGeom);
+			if (pBrep)
+			{
+				for (int ei = 0; ei < pBrep->m_E.Count(); ei++)
+				{
+					const ON_BrepEdge& edge = pBrep->m_E[ei];
+					ON_Curve* pCrv = edge.DuplicateCurve();
+					if (pCrv)
+					{
+						pCrv->Transform(instanceXform);
+						dp.DrawCurve(*pCrv, selColor, 2);
+						delete pCrv;
+					}
+				}
+			}
+
+			const ON_Mesh* pMesh = ON_Mesh::Cast(pGeom);
+			if (pMesh)
+			{
+				ON_Mesh meshCopy(*pMesh);
+				meshCopy.Transform(instanceXform);
+				dp.DrawMeshWires(meshCopy, selColor, 2);
+			}
+
+			const ON_Extrusion* pExtr = ON_Extrusion::Cast(pGeom);
+			if (pExtr)
+			{
+				ON_Brep* pBrepFromExtr = pExtr->BrepForm();
+				if (pBrepFromExtr)
+				{
+					for (int ei = 0; ei < pBrepFromExtr->m_E.Count(); ei++)
+					{
+						const ON_BrepEdge& edge = pBrepFromExtr->m_E[ei];
+						ON_Curve* pCrv = edge.DuplicateCurve();
+						if (pCrv)
+						{
+							pCrv->Transform(instanceXform);
+							dp.DrawCurve(*pCrv, selColor, 2);
+							delete pCrv;
+						}
+					}
+					delete pBrepFromExtr;
+				}
+			}
 		}
 	}
 

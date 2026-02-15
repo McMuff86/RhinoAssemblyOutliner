@@ -27,9 +27,9 @@ void CDocEventHandler::OnEndOpenDocument(CRhinoDoc& doc, const wchar_t* filename
 
 		const ON_UUID instanceId = pObject->Attributes().m_uuid;
 
-		// Check for our userdata on the object's geometry
+		// Check for our userdata on the object's attributes
 		CComponentVisibilityData* pUD = CComponentVisibilityData::Cast(
-			pObject->Geometry()->GetUserData(VisibilityUserDataId));
+			pObject->Attributes().GetUserData(VisibilityUserDataId));
 
 		if (pUD && !pUD->HiddenPaths.empty())
 		{
@@ -48,22 +48,19 @@ void CDocEventHandler::OnBeginSaveDocument(CRhinoDoc& doc, const wchar_t* filena
 
 	for (const auto& instanceId : managedIds)
 	{
-		const CRhinoObject* pObject = doc.LookupObjectByUuid(instanceId);
+		const CRhinoObject* pObject = doc.LookupObject(instanceId);
 		if (!pObject || pObject->ObjectType() != ON::instance_reference)
 			continue;
 
-		// We need to modify the object's geometry to attach userdata.
-		// Use ReplaceObject pattern: duplicate, attach UD, replace.
-		ON_Geometry* pGeomCopy = pObject->Geometry()->Duplicate();
-		if (!pGeomCopy)
-			continue;
+		// Attach UserData to object attributes for persistence
+		ON_3dmObjectAttributes newAttrs = pObject->Attributes();
 
 		// Remove existing UD if present
 		CComponentVisibilityData* pExisting = CComponentVisibilityData::Cast(
-			pGeomCopy->GetUserData(VisibilityUserDataId));
+			newAttrs.GetUserData(VisibilityUserDataId));
 		if (pExisting)
 		{
-			pGeomCopy->DetachUserData(pExisting);
+			newAttrs.DetachUserData(pExisting);
 			delete pExisting;
 		}
 
@@ -73,7 +70,7 @@ void CDocEventHandler::OnBeginSaveDocument(CRhinoDoc& doc, const wchar_t* filena
 
 		if (!pUD->HiddenPaths.empty())
 		{
-			if (!pGeomCopy->AttachUserData(pUD))
+			if (!newAttrs.AttachUserData(pUD))
 				delete pUD;
 		}
 		else
@@ -81,9 +78,7 @@ void CDocEventHandler::OnBeginSaveDocument(CRhinoDoc& doc, const wchar_t* filena
 			delete pUD;
 		}
 
-		// Replace the object geometry
-		doc.ReplaceObject(CRhinoObjRef(pObject), *pGeomCopy);
-		delete pGeomCopy;
+		doc.ModifyObjectAttributes(CRhinoObjRef(pObject), newAttrs);
 	}
 }
 

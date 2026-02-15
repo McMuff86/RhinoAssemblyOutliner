@@ -17,14 +17,13 @@ class CVisibilityData; // forward
 
 class CComponentVisibilityData : public ON_UserData
 {
-	ON_OBJECT_DECLARE(CComponentVisibilityData)
+	ON_OBJECT_DECLARE(CComponentVisibilityData);
 
 public:
 	CComponentVisibilityData();
 	~CComponentVisibilityData() override = default;
 
-	// ON_Object overrides
-	ON_UUID UserDataClassUuid() const override { return VisibilityUserDataId; }
+	// ON_UserData overrides
 	bool GetDescription(ON_wString& description) override;
 	bool Archive() const override { return true; }
 
