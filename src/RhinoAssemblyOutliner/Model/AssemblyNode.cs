@@ -6,7 +6,7 @@ namespace RhinoAssemblyOutliner.Model;
 /// Base class for all nodes in the assembly tree.
 /// Represents a hierarchical element that can contain children.
 /// </summary>
-public abstract class AssemblyNode
+public abstract class AssemblyNode : IAssemblyNode
 {
     /// <summary>
     /// Unique identifier for this node.
@@ -19,9 +19,24 @@ public abstract class AssemblyNode
     public string DisplayName { get; set; }
 
     /// <summary>
+    /// Name property for IAssemblyNode interface (delegates to DisplayName).
+    /// </summary>
+    string IAssemblyNode.Name => DisplayName;
+
+    /// <summary>
+    /// Explicit interface implementation for Children as IReadOnlyList.
+    /// </summary>
+    IReadOnlyList<AssemblyNode> IAssemblyNode.Children => Children;
+
+    /// <summary>
+    /// Explicit interface implementation for Parent (non-nullable).
+    /// </summary>
+    AssemblyNode IAssemblyNode.Parent { get => Parent!; set => Parent = value; }
+
+    /// <summary>
     /// Parent node in the hierarchy. Null for root nodes.
     /// </summary>
-    public AssemblyNode? Parent { get; internal set; }
+    public AssemblyNode? Parent { get; set; }
 
     /// <summary>
     /// Child nodes contained within this node.

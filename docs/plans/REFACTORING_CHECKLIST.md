@@ -5,7 +5,7 @@ Priority-ordered list of code quality fixes identified in Think Tank 2 analysis.
 
 ---
 
-## 1. ⚡ Fix `AssemblyNode.Id` — Use Rhino Object IDs
+## 1. ✅ Fix `AssemblyNode.Id` — Use Rhino Object IDs
 
 **Current:** `Id = Guid.NewGuid()` generates ephemeral ID every rebuild.  
 **Problem:** `_itemLookup` keyed on random GUIDs. `SelectNodeByObjectId` does O(n) full tree search.  
@@ -47,7 +47,7 @@ Also: capture `doc.RuntimeSerialNumber` at construction, validate before use.
 
 ---
 
-## 3. ⚡ Replace `ObservableCollection` with `List<T>` on `AssemblyNode.Children`
+## 3. ✅ Replace `ObservableCollection` with `List<T>` on `AssemblyNode.Children`
 
 **Current:** `ObservableCollection<AssemblyNode>` fires `CollectionChanged` on every add.  
 **Problem:** Tree is rebuilt from scratch (not incrementally updated), so change notifications are wasted overhead.  
@@ -66,7 +66,7 @@ Also: capture `doc.RuntimeSerialNumber` at construction, validate before use.
 
 ---
 
-## 5. ⚡ Add `IDisposable` to Panel + Centralize `RhinoDoc` Access
+## 5. ✅ Add `IDisposable` to Panel + Centralize `RhinoDoc` Access
 
 **Panel:** Create `System.Timers.Timer` but relies on `PanelClosing` for cleanup.  
 **Fix:** Implement `IDisposable`, dispose timer in both `Dispose()` and `PanelClosing`.
@@ -140,11 +140,11 @@ Or use `DisplayModeDescription.WireframeId` if RhinoCommon exposes it.
 
 | # | Item | Sprint | Effort | Priority |
 |---|------|--------|--------|----------|
-| 1 | AssemblyNode.Id → Rhino IDs | 1 | 1h | Critical |
+| 1 | ✅ AssemblyNode.Id → Rhino IDs | 1 | 1h | Critical |
 | 2 | VisibilityService doc leak | 2 | 30min | High |
-| 3 | ObservableCollection → List | 1 | 15min | Medium |
+| 3 | ✅ ObservableCollection → List | 1 | 15min | Medium |
 | 4 | Duplicate panel registration | 2 | 15min | Low |
-| 5 | IDisposable + centralize doc | 2 | 1h | High |
+| 5 | ✅ IDisposable + centralize doc | 2 | 1h | High |
 | 6 | Cycle detection | 2 | 15min | Low |
 | 7 | Geometry duplication (PoC) | N/A | — | Replaced by C++ |
 | 8 | String-based display mode | 2 | 30min | Medium |
