@@ -143,13 +143,21 @@ case Keys.Enter:
 
 ## TODO: Fixes Before Merge
 
-- [ ] **BLOCKING:** Add `Esc` key handler (exit isolate / show all)
-- [ ] **BLOCKING:** Add `Enter` key handler (BlockEdit on selected block)
-- [ ] Add `Shift+H` as alias for Show (alongside `S`)
-- [ ] Cache italic font in `OnCellFormatting` to avoid per-paint allocations
-- [ ] Fix `_needsRefresh` thread safety with `Interlocked`
-- [ ] Make `GetDoc()` usage consistent in VisibilityService (single call at method start)
-- [ ] Replace `RhinoDoc.ActiveDoc` in `OnZoomToRequested` with serial-number pattern
+- [x] **BLOCKING:** Add `Esc` key handler (exit isolate / show all) ✅
+- [x] **BLOCKING:** Add `Enter` key handler (BlockEdit on selected block) ✅
+- [x] Add `Shift+H` as alias for Show (alongside `S`) ✅
+- [x] Cache italic font in `OnCellFormatting` to avoid per-paint allocations ✅
+- [x] Fix `_needsRefresh` thread safety with `Interlocked` ✅
+- [x] Make `GetDoc()` usage consistent in VisibilityService (single call at method start) ✅
+- [x] Replace `RhinoDoc.ActiveDoc` in `OnZoomToRequested` with serial-number pattern ✅
+- [x] Mixed-state eye icon (◐) ✅
+- [x] Double-click → BlockEdit ✅
+- [x] Context menu restructure ✅
+- [x] Drag & drop reordering (bonus) ✅
+- [x] Missing field declarations fix ✅
+- [x] Hide/Show menu logic bug fix ✅
+- [x] FilterByText null check fix ✅
+- [x] DisplayMode null check fix ✅
 
 ---
 
