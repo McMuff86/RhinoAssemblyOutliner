@@ -4,6 +4,7 @@
 #include "NativeApi.h"
 #include "VisibilityConduit.h"
 #include "DocEventHandler.h"
+#include "Constants.h"
 
 // Version: increment when API changes (4 = ComponentState enum + conduit improvements)
 static const int NATIVE_API_VERSION = 4;
@@ -224,8 +225,6 @@ void DeserializeVisibilityState(const ON_wString& data, CVisibilityData& visData
 		}
 	}
 }
-
-static const wchar_t* RAO_DOC_KEY = L"RAO_VisibilityState";
 
 void __stdcall PersistVisibilityState()
 {

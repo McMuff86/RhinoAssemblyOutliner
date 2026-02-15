@@ -2,11 +2,19 @@ name: rhinoassemblyoutliner
 version: 1.0.0-rc.1
 authors:
   - Adrian McMuff
-description: SolidWorks-style Assembly Outliner for Rhino 8 — tree view with visibility control, isolate mode, and assembly workflows.
+description: >-
+  SolidWorks-style Assembly Outliner for Rhino 8 — tree view with visibility
+  control, isolate mode, and assembly workflows.
 url: https://github.com/McMuff86/RhinoAssemblyOutliner
+icon: resources/plugin-icon.png
 keywords:
   - assembly
   - outliner
   - visibility
   - blocks
   - tree
+  - bom
+  - solidworks
+  - assembly-management
+  - block-manager
+min_rhino_version: 8.0

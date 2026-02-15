@@ -4,9 +4,7 @@
 
 #include "stdafx.h"
 #include "DocEventHandler.h"
-
-// Shared doc key — must match NativeApi.cpp
-static const wchar_t* RAO_DOC_KEY = L"RAO_VisibilityState";
+#include "Constants.h"
 
 // Forward declarations for serialization helpers in NativeApi.cpp
 extern ON_wString SerializeVisibilityState(CVisibilityData& visData);
