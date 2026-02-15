@@ -390,12 +390,18 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         }
     }
 
+    private uint _visibilityServiceDocSerial;
+
     private void EnsureVisibilityService()
     {
         var doc = RhinoDoc.ActiveDoc;
-        if (doc != null && _visibilityService == null)
+        if (doc == null) return;
+
+        // Recreate if doc changed or not yet created
+        if (_visibilityService == null || _visibilityServiceDocSerial != doc.RuntimeSerialNumber)
         {
             _visibilityService = new VisibilityService(doc);
+            _visibilityServiceDocSerial = doc.RuntimeSerialNumber;
         }
     }
 
