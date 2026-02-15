@@ -71,7 +71,7 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     /// Called when the plugin is being unloaded.
     /// Cleans up native resources.
     /// </summary>
-    protected override void OnUnloadPlugIn()
+    protected override void OnShutdown()
     {
         // Unsubscribe all event handlers to prevent event leaks on static events
         RhinoDoc.BeginOpenDocument -= OnBeginOpenDocument;
@@ -92,6 +92,6 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
             }
         }
 
-        base.OnUnloadPlugIn();
+        base.OnShutdown();
     }
 }
