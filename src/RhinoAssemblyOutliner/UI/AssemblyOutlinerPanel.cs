@@ -78,6 +78,9 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _treeView.IsolateRequested += OnIsolateRequested;
         _treeView.ShowAllRequested += OnShowAllRequested;
         _treeView.SetAsAssemblyRootRequested += OnSetAsAssemblyRootRequested;
+        _treeView.HideRequested += OnHideRequested;
+        _treeView.ShowRequested += OnShowRequested;
+        _treeView.ZoomToRequested += OnZoomToRequested;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -382,6 +385,32 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         RefreshTree();
     }
     
+    private void OnHideRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Hide(node);
+        _treeView.ReloadData();
+    }
+
+    private void OnShowRequested(object sender, AssemblyNode node)
+    {
+        EnsureVisibilityService();
+        _visibilityService?.Show(node);
+        _treeView.ReloadData();
+    }
+
+    private void OnZoomToRequested(object sender, AssemblyNode node)
+    {
+        if (node is BlockInstanceNode blockNode)
+        {
+            var doc = RhinoDoc.ActiveDoc;
+            if (doc != null)
+            {
+                blockNode.ZoomToInstance(doc);
+            }
+        }
+    }
+
     private void OnSetAsAssemblyRootRequested(object sender, BlockInstanceNode blockNode)
     {
         if (blockNode != null && blockNode.InstanceId != Guid.Empty)

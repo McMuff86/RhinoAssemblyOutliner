@@ -45,7 +45,7 @@ Assembly Outliner provides the **missing hierarchical instance tree** that shows
 ## 📋 Features
 
 ### Navigation & Visualization
-- 🌳 **Hierarchical Tree** — Recursive block instance visualization  
+- 🌳 **Hierarchical Tree** — Recursive block instance visualization
 - 🔢 **Instance Count** — See how many of each definition exist
 - 📍 **Layer Display** — Layer assignment per instance
 - 🔗 **Link Type** — Embedded, Linked, or EmbeddedAndLinked
@@ -55,8 +55,24 @@ Assembly Outliner provides the **missing hierarchical instance tree** that shows
 - 👁 **Visibility Toggle** — Show/Hide/Isolate per entry
 - 🔍 **Search & Filter** — Find components quickly
 - 📋 **Context Menu** — Select all same, edit block, zoom to
+- 🏗️ **Assembly Mode** — Focus on a single sub-assembly root
 
-### 🆕 Per-Instance Component Visibility
+### ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| **H** | Hide selected |
+| **S** | Show selected |
+| **I** | Isolate selected |
+| **Space** | Show All (reset visibility) |
+| **F** | Zoom to / Frame selected |
+| **Del** | Delete selected |
+| **Enter** | Edit block (BlockEdit) |
+| **F5** | Refresh tree |
+| **Ctrl+F** | Focus search bar |
+| **Esc** | Clear search / exit isolate |
+
+### 🆕 Per-Instance Component Visibility (v2.0)
 
 **The killer feature Rhino doesn't have!**
 
@@ -68,18 +84,13 @@ Hide individual components within a single block instance — without affecting 
 │   ├─ ⬡ Tür          〰️ ← HIDDEN only in this instance
 │   └─ ⬡ Rückwand     👁️
 
-📦 Cabinet_600 #2     👁️ (all visible)  
+📦 Cabinet_600 #2     👁️ (all visible)
 │   ├─ ⬡ Korpus       👁️
 │   ├─ ⬡ Tür          👁️ ← Still visible here!
 │   └─ ⬡ Rückwand     👁️
 ```
 
-This is achieved through a **native C++ DisplayConduit** that intercepts Rhino's rendering pipeline.
-
-### Planned Features
-- 📊 BOM (Bill of Materials) export
-- 💾 Named Visibility States (like SolidWorks Display States)
-- ⌨️ Keyboard shortcuts (H/I for Hide/Isolate)
+Achieved through a **native C++ DisplayConduit** that intercepts Rhino's rendering pipeline. See [Architecture](#architecture).
 
 ---
 
@@ -106,6 +117,7 @@ This is achieved through a **native C++ DisplayConduit** that intercepts Rhino's
 2. Run command: `AssemblyOutliner`
 3. Dock the panel where convenient
 4. Click any node to select in viewport
+5. Use **H** / **S** / **I** / **Space** for visibility control
 
 For detailed usage, see the [User Guide](docs/USER_GUIDE.md).
 
@@ -123,48 +135,33 @@ For detailed usage, see the [User Guide](docs/USER_GUIDE.md).
 | **Commands** | C# | Rhino command integration |
 | **Services** | C# | Business logic, event handling |
 
-```
-RhinoAssemblyOutliner/
-├── src/
-│   ├── Native/              # C++ Plugin (DisplayConduit, UserData)
-│   │   ├── VisibilityConduit.cpp
-│   │   ├── ComponentVisibilityData.cpp
-│   │   └── NativeAPI.cpp    # extern "C" exports
-│   └── RhinoAssemblyOutliner/  # C# Plugin
-│       ├── Commands/
-│       ├── UI/
-│       ├── Model/
-│       ├── Services/
-│       └── Native/          # P/Invoke wrapper
-└── docs/
-```
+For the full architecture with data flow diagrams, state management, and P/Invoke API surface, see **[ARCHITECTURE_V2.md](docs/ARCHITECTURE_V2.md)**.
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed design documentation.
+Design decisions are documented in **[ADRs](docs/plans/ADR/)**.
+
+---
+
+## 🗺️ Roadmap
+
+| Version | Status | Focus |
+|---------|--------|-------|
+| **v0.1.0** | ✅ Done | Core outliner: tree, selection sync, visibility, search, assembly mode |
+| **v0.2.0** | 🔄 In Progress | UX polish: keyboard shortcuts, grayed hidden items, isolate flow, status bar |
+| **v1.0.0** | 📋 Planned | Stable release: bug fixes, tests, Yak package, documentation |
+| **v2.0.0** | 📋 Planned | Per-instance component visibility via C++ DisplayConduit |
+
+See [SPRINT_PLAN.md](docs/plans/SPRINT_PLAN.md) for detailed sprint breakdown.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read:
+Contributions are welcome! See the [Contributing Guide](docs/CONTRIBUTING.md) for:
 
-1. [CONTRIBUTING.md](CONTRIBUTING.md) — Development setup & guidelines
-2. [ARCHITECTURE.md](docs/ARCHITECTURE.md) — Technical overview
-3. [SPEC.md](docs/SPEC.md) — Feature specification
-
-### Development Setup
-
-```bash
-# Clone
-git clone https://github.com/your-org/RhinoAssemblyOutliner.git
-cd RhinoAssemblyOutliner
-
-# Build
-dotnet restore
-dotnet build
-
-# Debug in Rhino 8
-# Configure VS/Rider to launch Rhino as debug target
-```
+- How to build from source
+- Project structure
+- Coding conventions & commit format
+- Testing instructions
 
 ---
 
@@ -172,10 +169,12 @@ dotnet build
 
 | Document | Description |
 |----------|-------------|
-| [SPEC.md](docs/SPEC.md) | Feature specification & comparison |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture |
-| [USER_GUIDE.md](docs/USER_GUIDE.md) | End-user documentation |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development guide |
+| [User Guide](docs/USER_GUIDE.md) | End-user documentation |
+| [Architecture V2](docs/ARCHITECTURE_V2.md) | Technical architecture (hybrid C++/C#) |
+| [Sprint Plan](docs/plans/SPRINT_PLAN.md) | Development roadmap |
+| [Contributing](docs/CONTRIBUTING.md) | Development guide |
+| [Changelog](CHANGELOG.md) | Version history |
+| [ADRs](docs/plans/ADR/) | Architecture Decision Records |
 
 ---
 

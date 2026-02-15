@@ -48,6 +48,21 @@ public class AssemblyTreeView : TreeGridView
     /// </summary>
     public event EventHandler<BlockInstanceNode> SetAsAssemblyRootRequested;
 
+    /// <summary>
+    /// Raised when hide is requested for the selected node.
+    /// </summary>
+    public event EventHandler<AssemblyNode> HideRequested;
+
+    /// <summary>
+    /// Raised when show is requested for the selected node.
+    /// </summary>
+    public event EventHandler<AssemblyNode> ShowRequested;
+
+    /// <summary>
+    /// Raised when zoom-to-selected is requested.
+    /// </summary>
+    public event EventHandler<AssemblyNode> ZoomToRequested;
+
     public AssemblyTreeView()
     {
         _itemLookup = new Dictionary<Guid, AssemblyTreeItem>();
@@ -98,6 +113,85 @@ public class AssemblyTreeView : TreeGridView
         
         // Context menu
         ContextMenu = BuildContextMenu();
+
+        // Keyboard shortcuts
+        KeyDown += OnKeyDown;
+    }
+
+    /// <summary>
+    /// Handles keyboard shortcuts when tree has focus.
+    /// </summary>
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        var item = SelectedItem as AssemblyTreeItem;
+        var node = item?.Node;
+
+        switch (e.Key)
+        {
+            case Keys.Delete:
+            case Keys.Backspace:
+                // Delete/Backspace → Hide selected
+                if (node != null)
+                {
+                    HideRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.H:
+                if (e.Modifiers == (Keys.Control | Keys.Shift))
+                {
+                    // Ctrl+Shift+H → Show All
+                    ShowAllRequested?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
+                else if (e.Modifiers == Keys.None)
+                {
+                    // H → Hide selected
+                    if (node != null)
+                    {
+                        HideRequested?.Invoke(this, node);
+                        e.Handled = true;
+                    }
+                }
+                break;
+
+            case Keys.S:
+                if (e.Modifiers == Keys.None && node != null)
+                {
+                    // S → Show selected
+                    ShowRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.I:
+                if (e.Modifiers == Keys.None && node != null)
+                {
+                    // I → Isolate selected
+                    IsolateRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.Space:
+                if (e.Modifiers == Keys.None && node != null)
+                {
+                    // Space → Toggle visibility
+                    VisibilityToggleRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.F:
+                if (e.Modifiers == Keys.None && node != null)
+                {
+                    // F → Zoom to selected
+                    ZoomToRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+        }
     }
 
     /// <summary>
@@ -141,21 +235,21 @@ public class AssemblyTreeView : TreeGridView
         var selectAllItem = new ButtonMenuItem { Text = "Select All Instances" };
         selectAllItem.Click += (s, e) => SelectAllInstances();
 
-        var zoomItem = new ButtonMenuItem { Text = "Zoom To" };
+        var zoomItem = new ButtonMenuItem { Text = "Zoom To\tF" };
         zoomItem.Click += (s, e) => ZoomToSelected();
 
         var separator1 = new SeparatorMenuItem();
 
-        var hideItem = new ButtonMenuItem { Text = "Hide" };
+        var hideItem = new ButtonMenuItem { Text = "Hide\tH" };
         hideItem.Click += (s, e) => OnHideClicked();
 
-        var showItem = new ButtonMenuItem { Text = "Show" };
+        var showItem = new ButtonMenuItem { Text = "Show\tS" };
         showItem.Click += (s, e) => OnShowClicked();
 
-        var isolateItem = new ButtonMenuItem { Text = "Isolate" };
+        var isolateItem = new ButtonMenuItem { Text = "Isolate\tI" };
         isolateItem.Click += (s, e) => OnIsolateClicked();
 
-        var showAllItem = new ButtonMenuItem { Text = "Show All" };
+        var showAllItem = new ButtonMenuItem { Text = "Show All\tCtrl+Shift+H" };
         showAllItem.Click += (s, e) => ShowAllRequested?.Invoke(this, EventArgs.Empty);
 
         var separator2 = new SeparatorMenuItem();
