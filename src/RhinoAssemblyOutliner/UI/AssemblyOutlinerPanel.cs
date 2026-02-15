@@ -94,6 +94,7 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _treeView.ZoomToRequested += OnZoomToRequested;
         _treeView.HideWithChildrenRequested += OnHideWithChildrenRequested;
         _treeView.ShowWithChildrenRequested += OnShowWithChildrenRequested;
+        _treeView.ItemReordered += OnItemReordered;
 
         // Detail panel at bottom
         _detailPanel = new DetailPanel();
@@ -590,6 +591,13 @@ public class AssemblyOutlinerPanel : Panel, IPanel
         _visibilityService?.Show(node, includeChildren: true);
         _treeView.ReloadData();
         UpdateStatusBar(_rootNode);
+    }
+
+    private void OnItemReordered(object sender, (int fromIndex, int toIndex) e)
+    {
+        // Reorder already applied in model by TreeView.
+        // Future: persist order via UserText or file.
+        RhinoApp.WriteLine($"AssemblyOutliner: Reordered item from {e.fromIndex} to {e.toIndex}");
     }
 
     private void OnSetAsAssemblyRootRequested(object sender, BlockInstanceNode blockNode)

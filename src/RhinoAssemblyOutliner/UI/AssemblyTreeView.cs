@@ -79,6 +79,14 @@ public class AssemblyTreeView : TreeGridView
     /// </summary>
     public event EventHandler<AssemblyNode> ShowWithChildrenRequested;
 
+    /// <summary>
+    /// Raised when a top-level item is reordered via drag and drop.
+    /// </summary>
+    public event EventHandler<(int fromIndex, int toIndex)> ItemReordered;
+
+    // Drag state
+    private AssemblyTreeItem _dragSourceItem;
+
     public AssemblyTreeView()
     {
         _itemLookup = new Dictionary<Guid, AssemblyTreeItem>();
@@ -87,6 +95,7 @@ public class AssemblyTreeView : TreeGridView
         AllowMultipleSelection = false;
         ShowHeader = true;
         Border = BorderType.None;
+        AllowDrop = true;
 
         // Define columns
         // Visibility toggle column (eye icon)
@@ -132,6 +141,12 @@ public class AssemblyTreeView : TreeGridView
 
         // Keyboard shortcuts
         KeyDown += OnKeyDown;
+
+        // Drag & drop for reordering
+        MouseDown += OnMouseDown;
+        MouseMove += OnMouseMoveForDrag;
+        DragOver += OnDragOver;
+        DragDrop += OnDragDrop;
     }
 
     /// <summary>
@@ -176,6 +191,15 @@ public class AssemblyTreeView : TreeGridView
                 if (e.Modifiers == Keys.None && node != null)
                 {
                     // S → Show selected
+                    ShowRequested?.Invoke(this, node);
+                    e.Handled = true;
+                }
+                break;
+
+            case Keys.H when e.Modifiers == Keys.Shift:
+                if (node != null)
+                {
+                    // Shift+H → Show selected (SolidWorks convention)
                     ShowRequested?.Invoke(this, node);
                     e.Handled = true;
                 }
@@ -660,6 +684,87 @@ public class AssemblyTreeView : TreeGridView
 
         return null;
     }
+
+    #region Drag & Drop Reorder
+
+    private void OnMouseDown(object sender, MouseEventArgs e)
+    {
+        if (e.Buttons == MouseButtons.Primary)
+        {
+            _dragSourceItem = SelectedItem as AssemblyTreeItem;
+            // Only allow dragging top-level items (direct children of DocumentNode)
+            if (_dragSourceItem != null)
+            {
+                var parent = _dragSourceItem.Parent as AssemblyTreeItem;
+                if (parent?.Node is not DocumentNode)
+                    _dragSourceItem = null;
+            }
+        }
+    }
+
+    private void OnMouseMoveForDrag(object sender, MouseEventArgs e)
+    {
+        if (_dragSourceItem != null && e.Buttons == MouseButtons.Primary)
+        {
+            var data = new DataObject();
+            data.SetString(_dragSourceItem.Node.Id.ToString(), "AssemblyNodeId");
+            DoDragDrop(data, DragEffects.Move);
+            _dragSourceItem = null;
+        }
+    }
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        // Allow drop only on top-level siblings
+        var targetItem = SelectedItem as AssemblyTreeItem;
+        if (targetItem != null)
+        {
+            var parent = targetItem.Parent as AssemblyTreeItem;
+            if (parent?.Node is DocumentNode)
+            {
+                e.Effects = DragEffects.Move;
+                return;
+            }
+        }
+        e.Effects = DragEffects.None;
+    }
+
+    private void OnDragDrop(object sender, DragEventArgs e)
+    {
+        var targetItem = SelectedItem as AssemblyTreeItem;
+        if (targetItem == null) return;
+
+        var nodeIdStr = e.Data.GetString("AssemblyNodeId");
+        if (string.IsNullOrEmpty(nodeIdStr) || !Guid.TryParse(nodeIdStr, out var sourceNodeId))
+            return;
+
+        if (!_itemLookup.TryGetValue(sourceNodeId, out var sourceItem))
+            return;
+
+        // Both must be top-level children of the document root
+        var sourceParent = sourceItem.Parent as AssemblyTreeItem;
+        var targetParent = targetItem.Parent as AssemblyTreeItem;
+        if (sourceParent?.Node is not DocumentNode root || targetParent?.Node != root)
+            return;
+
+        int fromIndex = root.Children.IndexOf(sourceItem.Node);
+        int toIndex = root.Children.IndexOf(targetItem.Node);
+        if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
+            return;
+
+        // Reorder in model
+        var child = root.Children[fromIndex];
+        root.Children.RemoveAt(fromIndex);
+        root.Children.Insert(toIndex, child);
+
+        // Reload tree UI
+        LoadTree(_rootNode);
+
+        // Notify panel to persist order
+        ItemReordered?.Invoke(this, (fromIndex, toIndex));
+    }
+
+    #endregion
 
     #region Event Handlers
 
