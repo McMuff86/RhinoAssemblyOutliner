@@ -106,6 +106,8 @@ public class VariantManager : IVariantManager
         // Determine the source definition (might already be a variant)
         var currentDefId = instanceObj.InstanceDefinition.Id;
         var sourceDefId = GetSourceDefinitionId(doc, currentDefId) ?? currentDefId;
+        var sourceDef = doc.InstanceDefinitions.FindId(sourceDefId);
+        var sourceName = sourceDef?.Name ?? string.Empty;
 
         // Get or create the variant for the desired state
         var variantDefId = GetOrCreateVariant(doc, sourceDefId, state);
@@ -123,6 +125,22 @@ public class VariantManager : IVariantManager
         // Replace(Guid, GeometryBase, bool) — third arg is ignoreModes; false respects layer/lock state.
         if (!doc.Objects.Replace(instanceId, newGeometry, false))
             throw new InvalidOperationException($"Failed to replace instance {instanceId}.");
+
+        // Mask the variant name in Rhino's native UI: stamp the source definition
+        // name as the InstanceObject's Attributes.Name. Object Properties will then
+        // show "MBlock :: block instance" instead of "__aov_MBlock_<hash> :: block
+        // instance". This is a cosmetic shim until Sprint 4 stores the source name
+        // in ON_AssemblyUserData for full round-trip persistence.
+        if (!string.IsNullOrEmpty(sourceName))
+        {
+            var refreshed = doc.Objects.FindId(instanceId);
+            if (refreshed != null && refreshed.Attributes.Name != sourceName)
+            {
+                var attrs = refreshed.Attributes.Duplicate();
+                attrs.Name = sourceName;
+                doc.Objects.ModifyAttributes(instanceId, attrs, true);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -222,10 +240,11 @@ public class VariantManager : IVariantManager
         if (existingDef != null && !existingDef.IsDeleted)
             return existingDef.Id;
 
-        // Create the variant definition
+        // Create the variant definition. Description is shown in Rhino's Block
+        // Manager — make it clear this is internal and should not be edited.
         int defIndex = doc.InstanceDefinitions.Add(
             variantName,
-            $"Auto-generated variant of '{sourceDef.Name}'",
+            $"[Assembly Outliner — do not edit] Auto-generated variant of '{sourceDef.Name}' with {state.HiddenIndices.Count} hidden component(s).",
             Point3d.Origin,
             visibleGeometry,
             visibleAttributes
