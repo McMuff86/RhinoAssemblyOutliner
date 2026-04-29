@@ -6,6 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed (2026-04-29 — Phase A: Build Cleanup)
+- `VariantGarbageCollector` Timer ambiguity (`System.Timers.Timer` vs `System.Threading.Timer`) resolved via aliased `using`
+- `KeyboardShortcutMappingTests` enums (`Modifiers`, `OutlinerAction`) made `public` so they can appear in `[Theory]` method signatures
+- `VariantManager.ReassignInstance` used `variantDef.Index` (int) where `InstanceReferenceGeometry` expects a `Guid`; switched to `variantDef.Id`. Also corrected the `Objects.Replace` call to the 3-arg `Replace(Guid, GeometryBase, bool)` overload (RhinoCommon 8 has no 2-arg `GeometryBase` variant — only typed ones for Brep/Curve/Mesh/etc.)
+- `VisibilityService` referenced `node.Name` which does not exist on `AssemblyNode`; switched to `node.DisplayName`
+- `VisibilityService` ctor parameter `IVariantManager variantManager = null` made nullable to match its default
+
+### Documentation
+- `docs/plans/visibility-architecture-hardening.md` archived → `docs/archive/`. The doc proposed hardening the C++ DisplayConduit and contradicts the current v3 architecture (Definition Cloning supersedes the conduit)
+- `VisibilityService` xmldoc and a Legacy region clearly mark the native-conduit code path as Pre-v3 / to be removed when nested-block cloning lands
+
+### Known
+- 309/311 tests pass. Two preexisting test bugs remain (unrelated to Phase A):
+  - `AssemblyNodeEdgeCaseTests.Reparenting_MoveSubtree` — duplicate `Assert.Equal` lines, the first asserts `3` and the second `4` for the same value
+  - `VariantManagerTests.InvalidateCache_AfterInvalidation_NewVariantCreated` — test-double generates IDs deterministically from hash, so re-creating the same variant returns the same Guid; the real `VariantManager` would create a fresh `InstanceDefinition` (new Guid)
+
+---
+
 ## [Unreleased] - Sprint 2 Complete + Architecture v3
 
 ### Added

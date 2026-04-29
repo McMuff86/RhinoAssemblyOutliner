@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Timers;
 using Rhino;
 using Rhino.DocObjects;
+using SystemTimer = System.Timers.Timer;
+using ElapsedEventArgs = System.Timers.ElapsedEventArgs;
 
 namespace RhinoAssemblyOutliner.Services.Assembly;
 
@@ -21,7 +22,7 @@ public sealed class VariantGarbageCollector : IVariantGarbageCollector, IDisposa
     private const double DelayMs = 5000;
 
     private readonly object _lock = new();
-    private Timer? _timer;
+    private SystemTimer? _timer;
     private uint _pendingDocSerialNumber;
     private bool _disposed;
 
@@ -41,7 +42,7 @@ public sealed class VariantGarbageCollector : IVariantGarbageCollector, IDisposa
 
             if (_timer == null)
             {
-                _timer = new Timer(DelayMs) { AutoReset = false };
+                _timer = new SystemTimer(DelayMs) { AutoReset = false };
                 _timer.Elapsed += OnTimerElapsed;
             }
 

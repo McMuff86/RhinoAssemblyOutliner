@@ -95,20 +95,18 @@ public class VariantManager : IVariantManager
         // Get or create the variant for the desired state
         var variantDefId = GetOrCreateVariant(doc, sourceDefId, state);
 
-        // Find the variant definition index
+        // Find the variant definition
         var variantDef = doc.InstanceDefinitions.FindId(variantDefId);
         if (variantDef == null)
             throw new InvalidOperationException($"Variant definition {variantDefId} not found.");
 
-        // Replace the instance with one pointing to the new definition
-        var xform = instanceObj.InsertionPoint != Point3d.Origin
-            ? Transform.Translation(new Vector3d(instanceObj.InsertionPoint))
-            : instanceObj.InstanceXform;
+        // Replace the instance with one pointing to the new definition.
+        // Preserve the original transform so position/rotation/scale stay intact.
+        var xform = instanceObj.InstanceXform;
+        var newGeometry = new InstanceReferenceGeometry(variantDef.Id, xform);
 
-        var newGeometry = new InstanceReferenceGeometry(variantDef.Index, xform);
-        var attributes = instanceObj.Attributes.Duplicate();
-
-        if (!doc.Objects.Replace(instanceId, newGeometry))
+        // Replace(Guid, GeometryBase, bool) — third arg is ignoreModes; false respects layer/lock state.
+        if (!doc.Objects.Replace(instanceId, newGeometry, false))
             throw new InvalidOperationException($"Failed to replace instance {instanceId}.");
     }
 

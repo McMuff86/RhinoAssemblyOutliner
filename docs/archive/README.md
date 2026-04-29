@@ -24,3 +24,4 @@ Siehe `docs/architecture/` für die aktuelle Architektur:
 | `THINK_TANK_4_UI_INTEGRATION.md` | UI Integration für Conduit |
 | `REVIEW_SPRINT1.md` | Sprint 1 Review (erledigt) |
 | `code-review-sprint2.md` | Sprint 2 Code Review (alle Blocker gefixt) |
+| `visibility-architecture-hardening.md` | Härtungsplan für DisplayConduit — widerspricht v3-Architektur (Definition Cloning); archiviert 2026-04-29 |

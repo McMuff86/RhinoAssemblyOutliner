@@ -11,8 +11,17 @@ namespace RhinoAssemblyOutliner.Services;
 
 /// <summary>
 /// Service for managing visibility of block instances in the viewport.
-/// Top-level instances use standard Rhino show/hide.
-/// Nested components use native C++ per-instance visibility conduit with path-based addressing.
+///
+/// Visibility paths (current architecture, v3 — Definition Cloning):
+///   * Top-level <see cref="BlockInstanceNode"/> → standard Rhino Objects.Hide/Show
+///   * <see cref="ComponentNode"/> (non-block geometry inside a definition) → <see cref="IVariantManager"/>
+///
+/// Legacy path (Sprint 2, Pre-v3 — to be removed when nested-block cloning lands in Sprint 4+):
+///   * Nested <see cref="BlockInstanceNode"/> with <c>ComponentIndex &gt;= 0</c>
+///     → C++ DisplayConduit via <see cref="PerInstanceVisibility.NativeVisibilityInterop"/>.
+///   The native conduit had known issues (ghost artifacts, missing selection highlights,
+///   display-cache bypass). Definition Cloning supersedes it; this branch stays only as a
+///   fallback for nested blocks until the recursive cloning strategy is implemented.
 /// </summary>
 public class VisibilityService
 {
@@ -25,7 +34,7 @@ public class VisibilityService
     /// </summary>
     public event Action TreeRefreshNeeded;
 
-    public VisibilityService(RhinoDoc doc, IVariantManager variantManager = null)
+    public VisibilityService(RhinoDoc doc, IVariantManager? variantManager = null)
     {
         if (doc == null) throw new ArgumentNullException(nameof(doc));
         _docSerialNumber = doc.RuntimeSerialNumber;
@@ -59,8 +68,8 @@ public class VisibilityService
         }
 
         string desc = node.IsVisible
-            ? $"Hide {node.Name}"
-            : $"Show {node.Name}";
+            ? $"Hide {node.DisplayName}"
+            : $"Show {node.DisplayName}";
 
         using (UndoHelper.CreateScope(doc, desc))
         {
@@ -104,7 +113,7 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        string desc = visible ? $"Show {node.Name}" : $"Hide {node.Name}";
+        string desc = visible ? $"Show {node.DisplayName}" : $"Hide {node.DisplayName}";
         using (UndoHelper.CreateScope(doc, desc))
         {
             SetVisibilityInternal(node, visible, includeChildren);
@@ -156,7 +165,7 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        using (UndoHelper.CreateScope(doc, $"Isolate {node.Name}"))
+        using (UndoHelper.CreateScope(doc, $"Isolate {node.DisplayName}"))
         {
             // Hide all top-level block instances
             foreach (var obj in doc.Objects.GetObjectList(ObjectType.InstanceReference))
@@ -210,7 +219,7 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        using (UndoHelper.CreateScope(doc, $"Hide {node.Name}"))
+        using (UndoHelper.CreateScope(doc, $"Hide {node.DisplayName}"))
         {
             SetVisibilityInternal(node, false, includeChildren);
             doc.Views.Redraw();
@@ -225,7 +234,7 @@ public class VisibilityService
         var doc = GetDoc();
         if (doc == null) return;
 
-        using (UndoHelper.CreateScope(doc, $"Show {node.Name}"))
+        using (UndoHelper.CreateScope(doc, $"Show {node.DisplayName}"))
         {
             SetVisibilityInternal(node, true, includeChildren);
             doc.Views.Redraw();
@@ -317,7 +326,11 @@ public class VisibilityService
 
     #endregion
 
-    #region Native Per-Instance Visibility
+    #region Legacy: Native Per-Instance Visibility (DisplayConduit, Pre-v3)
+
+    // The methods in this region drive the C++ DisplayConduit for nested block instances.
+    // Definition Cloning (VariantManager) will replace this when recursive cloning ships
+    // in Sprint 4+. Do not extend this code path — add new visibility logic via VariantManager.
 
     private void InitializeNative()
     {

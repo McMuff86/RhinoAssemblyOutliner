@@ -9,9 +9,9 @@ namespace RhinoAssemblyOutliner.Tests.UI;
 public class KeyboardShortcutMappingTests
 {
     [Flags]
-    private enum Modifiers { None = 0, Ctrl = 1, Shift = 2, Alt = 4 }
+    public enum Modifiers { None = 0, Ctrl = 1, Shift = 2, Alt = 4 }
 
-    private enum OutlinerAction
+    public enum OutlinerAction
     {
         Hide, Show, ShowAll, Isolate, ExitIsolate,
         ToggleVisibility, ZoomToSelection, BlockEdit,
