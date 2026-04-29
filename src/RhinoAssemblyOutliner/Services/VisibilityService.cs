@@ -38,7 +38,11 @@ public class VisibilityService
     {
         if (doc == null) throw new ArgumentNullException(nameof(doc));
         _docSerialNumber = doc.RuntimeSerialNumber;
-        _variantManager = variantManager ?? new VariantManager();
+        // Prefer the plugin-wide singleton so the variant cache stays consistent
+        // with what the AssemblyTreeBuilder reads.
+        _variantManager = variantManager
+            ?? RhinoAssemblyOutlinerPlugin.Instance?.VariantManager
+            ?? new VariantManager();
         InitializeNative();
     }
 

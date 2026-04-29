@@ -97,31 +97,28 @@ public class AssemblyTreeView : TreeGridView
         Border = BorderType.None;
         AllowDrop = true;
 
-        // Define columns
-        // Visibility toggle column (eye icon) — fixed width, not auto-sized
-        // Note: In Eto TreeGridView, column 0 shares space with the expand/collapse
-        // triangle, so we need enough width (40px) to keep the icon clickable.
+        // Define columns.
+        // Eye column: Eto's TreeGridView column 0 shares space with the tree
+        // indent/triangle, and its right-edge divider is not draggable. To
+        // compensate we ship a generous default width so the click target
+        // for the visibility icon is always reachable, even at deeper indents.
         var visibilityColumn = new GridColumn
         {
             HeaderText = "👁",
             DataCell = new TextBoxCell(0),
-            Width = 40,
-            Resizable = false,
+            Width = 90,
+            Resizable = true,
             AutoSize = false,
             Editable = false
         };
         Columns.Add(visibilityColumn);
 
-        // Name column — use fixed width instead of AutoSize to prevent
-        // the column from collapsing when nodes are collapsed/expanded.
-        // AutoSize recalculates based on visible content which causes
-        // the "must click Collapse All multiple times" issue.
         Columns.Add(new GridColumn
         {
             HeaderText = "Name",
             DataCell = new TextBoxCell(1),
-            Width = 200,
-            AutoSize = false,
+            Width = 240,
+            AutoSize = true,
             Resizable = true,
             Editable = false
         });
@@ -131,7 +128,9 @@ public class AssemblyTreeView : TreeGridView
             HeaderText = "Layer",
             DataCell = new TextBoxCell(2),
             Width = 120,
-            Resizable = true
+            AutoSize = true,
+            Resizable = true,
+            Editable = false
         });
 
         Columns.Add(new GridColumn
@@ -139,7 +138,9 @@ public class AssemblyTreeView : TreeGridView
             HeaderText = "Type",
             DataCell = new TextBoxCell(3),
             Width = 80,
-            Resizable = true
+            AutoSize = true,
+            Resizable = true,
+            Editable = false
         });
 
         // Wire up events
@@ -595,45 +596,87 @@ public class AssemblyTreeView : TreeGridView
     #endregion
 
     /// <summary>
-    /// Loads the tree from a document root node.
+    /// Loads the tree from a document root node, preserving the previous
+    /// expansion state by node id where possible. New nodes default to
+    /// expanded (so freshly inserted blocks/components are visible).
     /// </summary>
     public void LoadTree(DocumentNode rootNode)
     {
+        var previouslyExpanded = CaptureExpandedNodeIds();
+
         _rootNode = rootNode;
         _itemLookup.Clear();
 
         var collection = new TreeGridItemCollection();
-
-        // Add document root
         var rootItem = new AssemblyTreeItem(rootNode);
         RegisterItemRecursive(rootItem);
         collection.Add(rootItem);
 
         DataStore = collection;
 
-        // Expand root by default
+        // Always expand the document root.
         rootItem.Expanded = true;
+
+        // Restore expansion: previously-expanded items stay expanded;
+        // brand-new items keep their default-from-constructor (BlockInstanceNode = true).
+        RestoreExpansion(rootItem, previouslyExpanded);
+        ReloadData();
     }
-    
+
     /// <summary>
-    /// Loads the tree from a block instance node (Assembly Mode).
+    /// Loads the tree from a block instance node (Assembly Mode), preserving
+    /// expansion state where possible.
     /// </summary>
     public void LoadTreeFromBlock(BlockInstanceNode blockNode)
     {
+        var previouslyExpanded = CaptureExpandedNodeIds();
+
         _rootNode = null; // No document root in assembly mode
         _itemLookup.Clear();
 
         var collection = new TreeGridItemCollection();
-
-        // Add block as root
         var rootItem = new AssemblyTreeItem(blockNode);
         RegisterItemRecursive(rootItem);
         collection.Add(rootItem);
 
         DataStore = collection;
 
-        // Expand root by default
         rootItem.Expanded = true;
+        RestoreExpansion(rootItem, previouslyExpanded);
+        ReloadData();
+    }
+
+    /// <summary>
+    /// Walks the current data store and returns the set of node ids whose
+    /// tree items are currently expanded. Empty on first load.
+    /// </summary>
+    private HashSet<Guid> CaptureExpandedNodeIds()
+    {
+        var result = new HashSet<Guid>();
+        if (DataStore is not TreeGridItemCollection items) return result;
+        foreach (var item in items.OfType<AssemblyTreeItem>())
+            CollectExpanded(item, result);
+        return result;
+    }
+
+    private static void CollectExpanded(AssemblyTreeItem item, HashSet<Guid> ids)
+    {
+        if (item.Expanded) ids.Add(item.Node.Id);
+        foreach (var child in item.Children.OfType<AssemblyTreeItem>())
+            CollectExpanded(child, ids);
+    }
+
+    /// <summary>
+    /// Re-applies a previously-captured expansion set. Items whose id was
+    /// expanded before are expanded again; brand-new items keep whatever
+    /// the constructor decided (BlockInstanceNode → expanded by default).
+    /// </summary>
+    private static void RestoreExpansion(AssemblyTreeItem item, HashSet<Guid> previouslyExpanded)
+    {
+        if (previouslyExpanded.Contains(item.Node.Id))
+            item.Expanded = true;
+        foreach (var child in item.Children.OfType<AssemblyTreeItem>())
+            RestoreExpansion(child, previouslyExpanded);
     }
 
     /// <summary>
@@ -1026,7 +1069,10 @@ public class AssemblyTreeItem : TreeGridItem
             }
         }
 
-        Expanded = false;
+        // Auto-expand block instances so users see their components without
+        // having to click each ▶. Component leaves and the document root stay
+        // as the default (root is explicitly expanded in LoadTree).
+        Expanded = node is BlockInstanceNode;
     }
 
     /// <summary>

@@ -451,8 +451,10 @@ public class AssemblyOutlinerPanel : Panel, IPanel, IDisposable
     {
         EnsureVisibilityService();
         _visibilityService?.ToggleVisibility(node);
-        _treeView.ReloadData();
-        UpdateStatusBar(_rootNode);
+        // Full rebuild from doc state — Replace() can shuffle Doc.Objects ordering,
+        // so we cannot trust ReloadData() to keep the in-memory tree consistent.
+        // Expansion is preserved in LoadTree, so the user does not lose UI state.
+        RefreshTree();
     }
 
     private void OnIsolateRequested(object sender, AssemblyNode node)

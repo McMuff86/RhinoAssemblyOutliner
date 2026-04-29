@@ -130,23 +130,25 @@ public class AssemblyTreeBuilder
 
     /// <summary>
     /// Gets all top-level objects in the document (not nested in blocks).
+    /// Sorted by Id so that instance numbering stays consistent across rebuilds —
+    /// Doc.Objects iteration order is NOT stable after Replace() (which is what
+    /// VariantManager.ReassignInstance does on every visibility toggle).
     /// </summary>
     private List<RhinoObject> GetTopLevelObjects()
     {
         var objects = new List<RhinoObject>();
-        
+
         // Get all objects that are not deleted and not definition geometry
         foreach (var obj in _doc.Objects)
         {
-            // Skip objects that are part of block definitions
             if (obj.Attributes.IsInstanceDefinitionObject) continue;
-            
-            // Skip deleted objects
             if (obj.IsDeleted) continue;
-            
             objects.Add(obj);
         }
 
+        // Stable order: by Id (Guid). The user perceives a consistent #1, #2, ...
+        // mapping that does not jump around when an instance gets reassigned.
+        objects.Sort((a, b) => a.Id.CompareTo(b.Id));
         return objects;
     }
 
@@ -177,59 +179,120 @@ public class AssemblyTreeBuilder
     {
         // Guard against null
         if (instance == null) return null;
-        
-        var definition = instance.InstanceDefinition;
-        if (definition == null || definition.IsDeleted) return null;
 
-        // Filter out variant definitions (__aov_*) — they are internal implementation details
-        if (definition.Name.StartsWith(VariantManager.VariantPrefix, StringComparison.Ordinal))
-            return null;
+        var actualDef = instance.InstanceDefinition;
+        if (actualDef == null || actualDef.IsDeleted) return null;
+
+        // If this instance points at a variant definition, present it as the
+        // source definition. The variant exists only as an implementation detail
+        // of the cloning strategy — users should see and edit the source.
+        var sourceDef = ResolveSourceDefinition(actualDef);
+        if (sourceDef == null || sourceDef.IsDeleted) return null;
 
         // Prevent infinite recursion from circular/self-referencing block definitions
         if (depth > MaxRecursionDepth)
         {
-            RhinoApp.WriteLine($"AssemblyOutliner: Max recursion depth reached for block '{definition.Name}'");
+            RhinoApp.WriteLine($"AssemblyOutliner: Max recursion depth reached for block '{sourceDef.Name}'");
             return null;
         }
 
-        if (!_visitedDefinitions.Add(definition.Index))
+        if (!_visitedDefinitions.Add(sourceDef.Index))
         {
-            RhinoApp.WriteLine($"AssemblyOutliner: Circular reference detected for block '{definition.Name}', skipping.");
+            RhinoApp.WriteLine($"AssemblyOutliner: Circular reference detected for block '{sourceDef.Name}', skipping.");
             return null;
         }
 
-        // Increment instance counter for this definition
-        if (!_definitionInstanceCounters.ContainsKey(definition.Index))
+        // Increment instance counter for this definition (count by source, not variant,
+        // so multiple instances on different variants of the same source still number 1..N).
+        if (!_definitionInstanceCounters.ContainsKey(sourceDef.Index))
         {
-            _definitionInstanceCounters[definition.Index] = 0;
+            _definitionInstanceCounters[sourceDef.Index] = 0;
         }
-        _definitionInstanceCounters[definition.Index]++;
-        
-        var instanceNumber = _definitionInstanceCounters[definition.Index];
-        var totalCount = _definitionTotalCounts.GetValueOrDefault(definition.Index, 1);
+        _definitionInstanceCounters[sourceDef.Index]++;
 
-        // Create the node
+        var instanceNumber = _definitionInstanceCounters[sourceDef.Index];
+        var totalCount = _definitionTotalCounts.GetValueOrDefault(sourceDef.Index, 1);
+
+        // Create the node using the SOURCE definition info (name, link type, ...).
         BlockInstanceNode node;
         try
         {
-            node = new BlockInstanceNode(instance, definition, instanceNumber)
+            node = new BlockInstanceNode(instance, sourceDef, instanceNumber)
             {
                 TotalInstanceCount = totalCount
             };
         }
         catch (Exception ex)
         {
-            RhinoApp.WriteLine($"AssemblyOutliner: Error creating node for '{definition.Name}': {ex.Message}");
+            RhinoApp.WriteLine($"AssemblyOutliner: Error creating node for '{sourceDef.Name}': {ex.Message}");
             return null;
         }
 
+        // Determine which component indices are hidden on THIS instance.
+        // If the instance is on a variant we know about, ask the VariantManager
+        // for the state. Otherwise everything is visible (instance is on source).
+        var hiddenIndices = ResolveHiddenIndicesForInstance(actualDef, sourceDef);
+
         // Recursively process nested blocks within this definition
-        ProcessDefinitionContents(node, definition, depth + 1);
+        ProcessDefinitionContents(node, sourceDef, depth + 1, hiddenIndices);
 
         // Remove from visited so sibling instances of the same definition can be processed
-        _visitedDefinitions.Remove(definition.Index);
+        _visitedDefinitions.Remove(sourceDef.Index);
 
         return node;
+    }
+
+    /// <summary>
+    /// Maps a definition that may be a variant (__aov_<source>_<hash>) back to
+    /// its source. Falls back to the input if no source is found.
+    /// </summary>
+    private InstanceDefinition? ResolveSourceDefinition(InstanceDefinition def)
+    {
+        if (def == null) return null;
+        if (!def.Name.StartsWith(VariantManager.VariantPrefix, StringComparison.Ordinal))
+            return def;
+
+        // Ask the plugin-wide VariantManager first (authoritative).
+        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
+        if (vm != null)
+        {
+            var sourceId = vm.GetSourceDefinitionId(_doc, def.Id);
+            if (sourceId.HasValue)
+            {
+                var byId = _doc.InstanceDefinitions.FindId(sourceId.Value);
+                if (byId != null && !byId.IsDeleted) return byId;
+            }
+        }
+
+        // Fallback: parse "__aov_<sourceName>_<hash>" by name.
+        var withoutPrefix = def.Name.Substring(VariantManager.VariantPrefix.Length);
+        var lastUnderscore = withoutPrefix.LastIndexOf('_');
+        if (lastUnderscore <= 0) return def;
+        var sourceName = withoutPrefix.Substring(0, lastUnderscore);
+        var byName = _doc.InstanceDefinitions.Find(sourceName);
+        if (byName != null && !byName.IsDeleted) return byName;
+
+        return def;
+    }
+
+    /// <summary>
+    /// Returns the set of source-component indices that are hidden on this
+    /// instance. Empty set means all components visible.
+    /// </summary>
+    private HashSet<int> ResolveHiddenIndicesForInstance(InstanceDefinition actualDef, InstanceDefinition sourceDef)
+    {
+        if (actualDef == null || actualDef.Id == sourceDef.Id)
+            return new HashSet<int>(); // instance on source → nothing hidden
+
+        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
+        var state = vm?.GetVariantState(actualDef.Id);
+        if (state != null)
+            return new HashSet<int>(state.HiddenIndices);
+
+        // Variant exists but we have no in-memory state (e.g. file just opened
+        // before ON_UserData persistence ships in Sprint 4). Everything is shown
+        // as visible; user can still see the variant's actual rendering in viewport.
+        return new HashSet<int>();
     }
 
     /// <summary>
@@ -238,12 +301,14 @@ public class AssemblyTreeBuilder
     /// <param name="parentNode">The parent node to add children to.</param>
     /// <param name="definition">The block definition to process.</param>
     /// <param name="depth">Current recursion depth.</param>
-    private void ProcessDefinitionContents(BlockInstanceNode parentNode, InstanceDefinition definition, int depth = 0)
+    private void ProcessDefinitionContents(BlockInstanceNode parentNode, InstanceDefinition definition, int depth = 0, HashSet<int>? hiddenComponentIndices = null)
     {
         if (definition == null) return;
 
         var objects = definition.GetObjects();
         if (objects == null || objects.Length == 0) return;
+
+        hiddenComponentIndices ??= new HashSet<int>();
 
         // Resolve the owner instance ID (top-level instance that owns this tree branch)
         var ownerInstanceId = ResolveOwnerInstanceId(parentNode);
@@ -272,10 +337,12 @@ public class AssemblyTreeBuilder
                 }
                 else
                 {
-                    // Non-instance geometry → ComponentNode with eye-icon
-                    var componentNode = new ComponentNode(obj, i, definition.Id, _doc)
+                    // Non-instance geometry → ComponentNode with eye-icon.
+                    // OwnerInstanceId is part of the constructor so the node Id
+                    // stays unique across multiple instances of the same definition.
+                    var componentNode = new ComponentNode(obj, i, definition.Id, _doc, ownerInstanceId)
                     {
-                        OwnerInstanceId = ownerInstanceId
+                        IsVisible = !hiddenComponentIndices.Contains(i)
                     };
                     parentNode.AddChild(componentNode);
                 }

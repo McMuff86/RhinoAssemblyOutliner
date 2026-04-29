@@ -43,6 +43,13 @@ public class VariantManager : IVariantManager
     /// </summary>
     private readonly ConcurrentDictionary<Guid, Guid> _reverseMap = new();
 
+    /// <summary>
+    /// variantDefinitionId → VisibilityState that produced it.
+    /// Lets the tree builder know which component indices are hidden when an
+    /// instance currently points at a variant.
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, VisibilityState> _variantStates = new();
+
     /// <inheritdoc />
     public Guid GetOrCreateVariant(RhinoDoc doc, Guid sourceDefinitionId, VisibilityState state)
     {
@@ -66,6 +73,7 @@ public class VariantManager : IVariantManager
             // Cached definition was deleted — remove stale entry
             _cache.TryRemove(key, out _);
             _reverseMap.TryRemove(cachedId, out _);
+            _variantStates.TryRemove(cachedId, out _);
         }
 
         // Create new variant definition
@@ -74,8 +82,15 @@ public class VariantManager : IVariantManager
         // Cache it
         _cache[key] = variantId;
         _reverseMap[variantId] = sourceDefinitionId;
+        _variantStates[variantId] = state;
 
         return variantId;
+    }
+
+    /// <inheritdoc />
+    public VisibilityState? GetVariantState(Guid variantDefinitionId)
+    {
+        return _variantStates.TryGetValue(variantDefinitionId, out var state) ? state : null;
     }
 
     /// <inheritdoc />
@@ -157,7 +172,10 @@ public class VariantManager : IVariantManager
         foreach (var key in keysToRemove)
         {
             if (_cache.TryRemove(key, out var variantId))
+            {
                 _reverseMap.TryRemove(variantId, out _);
+                _variantStates.TryRemove(variantId, out _);
+            }
         }
     }
 

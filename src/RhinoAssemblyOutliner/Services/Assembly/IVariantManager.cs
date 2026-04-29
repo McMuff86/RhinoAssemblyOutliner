@@ -38,4 +38,11 @@ public interface IVariantManager
     /// Call this when the source definition is modified (e.g., after BlockEdit).
     /// </summary>
     void InvalidateCache(Guid sourceDefinitionId);
+
+    /// <summary>
+    /// Returns the VisibilityState that produced a given variant definition,
+    /// or null if the variant is unknown to this manager (e.g. loaded from a
+    /// .3dm file before ON_UserData persistence is implemented).
+    /// </summary>
+    VisibilityState? GetVariantState(Guid variantDefinitionId);
 }

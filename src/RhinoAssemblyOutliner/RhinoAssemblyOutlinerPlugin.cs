@@ -24,6 +24,9 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     /// <summary>Event handler for assembly-related document events.</summary>
     private AssemblyEventHandler? _assemblyEventHandler;
 
+    /// <summary>Single VariantManager shared by all panels and the tree builder.</summary>
+    private VariantManager? _variantManager;
+
     /// <summary>
     /// Plugin constructor.
     /// </summary>
@@ -39,6 +42,13 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     public AssemblyEventHandler? AssemblyEventHandler => _assemblyEventHandler;
 
     /// <summary>
+    /// The plugin-wide VariantManager. All visibility-toggle paths and the
+    /// tree builder MUST go through this instance so the variant cache and
+    /// state map are consistent.
+    /// </summary>
+    public IVariantManager VariantManager => _variantManager ??= new VariantManager();
+
+    /// <summary>
     /// Called when the plugin is being loaded.
     /// </summary>
     protected override LoadReturnCode OnLoad(ref string errorMessage)
@@ -48,6 +58,7 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
         // Panel is registered in OpenOutlinerCommand constructor
 
         // --- Sprint 3: Assembly lifecycle services ---
+        _variantManager = new VariantManager();
         _garbageCollector = new VariantGarbageCollector();
         _assemblyEventHandler = new AssemblyEventHandler(_garbageCollector);
         _assemblyEventHandler.Subscribe();

@@ -16,7 +16,7 @@
     <AssemblyName>RhinoAssemblyOutliner</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoAssemblyOutliner</RootNamespace>
-    <Version>1.0.0-rc.1</Version>
+    <Version>1.0.0-rc.8</Version>
     <Authors>Adrian Muff</Authors>
     <Company>Muff Software</Company>
     <Copyright>Copyright © 2026 Adrian Muff</Copyright>

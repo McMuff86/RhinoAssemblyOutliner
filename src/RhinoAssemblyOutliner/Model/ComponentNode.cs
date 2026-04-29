@@ -47,13 +47,17 @@ public class ComponentNode : AssemblyNode
     /// <param name="componentIndex">Index within definition.GetObjects().</param>
     /// <param name="parentDefinitionId">ID of the containing block definition.</param>
     /// <param name="doc">The Rhino document (for layer lookup).</param>
-    public ComponentNode(RhinoObject obj, int componentIndex, Guid parentDefinitionId, RhinoDoc doc)
-        : base(CreateComponentId(parentDefinitionId, componentIndex), FormatName(obj, componentIndex))
+    /// <param name="ownerInstanceId">Top-level instance that owns this component view.
+    /// Required to keep the node Id unique when several instances of the same
+    /// definition appear in the tree.</param>
+    public ComponentNode(RhinoObject obj, int componentIndex, Guid parentDefinitionId, RhinoDoc doc, Guid ownerInstanceId)
+        : base(CreateComponentId(parentDefinitionId, componentIndex, ownerInstanceId), FormatName(obj, componentIndex))
     {
         ObjectId = obj.Id;
         ComponentIndex = componentIndex;
         GeometryType = obj.ObjectType;
         ParentDefinitionId = parentDefinitionId;
+        OwnerInstanceId = ownerInstanceId;
 
         // Get layer
         if (doc != null && obj.Attributes.LayerIndex >= 0
@@ -64,18 +68,28 @@ public class ComponentNode : AssemblyNode
     }
 
     /// <summary>
-    /// Creates a deterministic GUID for a component node based on definition + index.
+    /// Creates a deterministic GUID that is unique per (definition, index, owning-instance).
+    /// Two ComponentNodes for the same component in different instances of the same
+    /// definition MUST have different Ids — Eto's TreeGridView and our _itemLookup rely on it.
     /// </summary>
-    private static Guid CreateComponentId(Guid parentDefId, int index)
+    private static Guid CreateComponentId(Guid parentDefId, int index, Guid ownerInstanceId)
     {
-        var bytes = parentDefId.ToByteArray();
-        // Mix in the component index
+        Span<byte> defBytes = stackalloc byte[16];
+        Span<byte> ownerBytes = stackalloc byte[16];
+        parentDefId.TryWriteBytes(defBytes);
+        ownerInstanceId.TryWriteBytes(ownerBytes);
+
+        // XOR the owner instance Id into the def Id — gives us a stable, unique
+        // 128-bit value per (def, owner). Then stamp index + marker into trailing bytes.
+        Span<byte> result = stackalloc byte[16];
+        for (int i = 0; i < 16; i++) result[i] = (byte)(defBytes[i] ^ ownerBytes[i]);
+
         var indexBytes = BitConverter.GetBytes(index);
-        bytes[12] = indexBytes[0];
-        bytes[13] = indexBytes[1];
-        bytes[14] = indexBytes[2];
-        bytes[15] = 0xC0; // "COmponent" marker
-        return new Guid(bytes);
+        result[12] = indexBytes[0];
+        result[13] = indexBytes[1];
+        result[14] = indexBytes[2];
+        result[15] = 0xC0; // "COmponent" marker
+        return new Guid(result);
     }
 
     /// <summary>
