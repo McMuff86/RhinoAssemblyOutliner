@@ -17,3 +17,10 @@ EXPORTS
     IsConduitEnabled
     SetComponentState
     GetComponentState
+    AttachAssemblyData
+    HasAssemblyData
+    RemoveAssemblyData
+    GetSourceDefinitionId
+    GetSourceDefinitionName
+    GetHiddenComponentIndices
+    GetAssemblyComponentCount

@@ -21,6 +21,7 @@ public sealed class AssemblyEventHandler : IDisposable
     private readonly IVariantGarbageCollector _gc;
     private bool _subscribed;
     private bool _disposed;
+    private int _suspendCount;
 
     /// <summary>
     /// Fired when a source definition has been modified (e.g. after BlockEdit)
@@ -73,12 +74,22 @@ public sealed class AssemblyEventHandler : IDisposable
     }
 
     /// <summary>
+    /// Temporarily suppresses assembly event handling.
+    /// </summary>
+    public IDisposable Suspend()
+    {
+        _suspendCount++;
+        return new Suspension(this);
+    }
+
+    /// <summary>
     /// Handles InstanceDefinitionTable events.
     /// When a source definition is modified (BlockEdit complete), all its
     /// variant definitions must be refreshed.
     /// </summary>
     private void OnInstanceDefinitionTableEvent(object sender, InstanceDefinitionTableEventArgs e)
     {
+        if (_suspendCount > 0) return;
         if (e == null) return;
 
         // We care about Modified events — this fires when BlockEdit completes
@@ -115,6 +126,7 @@ public sealed class AssemblyEventHandler : IDisposable
     /// </summary>
     private void OnDeleteRhinoObject(object sender, RhinoObjectEventArgs e)
     {
+        if (_suspendCount > 0) return;
         if (e?.TheObject is not InstanceObject) return;
 
         var doc = e.TheObject.Document;
@@ -129,6 +141,7 @@ public sealed class AssemblyEventHandler : IDisposable
     /// </summary>
     private void OnCloseDocument(object sender, DocumentEventArgs e)
     {
+        if (_suspendCount > 0) return;
         RhinoApp.WriteLine("AssemblyOutliner: Document closing — clearing caches.");
         CacheClearRequired?.Invoke(this, EventArgs.Empty);
     }
@@ -139,10 +152,17 @@ public sealed class AssemblyEventHandler : IDisposable
     /// </summary>
     private void OnEndOpenDocument(object sender, DocumentOpenEventArgs e)
     {
+        if (_suspendCount > 0) return;
         if (e.Document != null)
         {
             _gc.ScheduleCollection(e.Document);
         }
+    }
+
+    private void Resume()
+    {
+        if (_suspendCount > 0)
+            _suspendCount--;
     }
 
     public void Dispose()
@@ -150,6 +170,22 @@ public sealed class AssemblyEventHandler : IDisposable
         if (_disposed) return;
         _disposed = true;
         Unsubscribe();
+    }
+
+    private sealed class Suspension : IDisposable
+    {
+        private AssemblyEventHandler? _owner;
+
+        public Suspension(AssemblyEventHandler owner)
+        {
+            _owner = owner;
+        }
+
+        public void Dispose()
+        {
+            _owner?.Resume();
+            _owner = null;
+        }
     }
 }
 

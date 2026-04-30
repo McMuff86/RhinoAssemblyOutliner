@@ -5,14 +5,15 @@
 #include "VisibilityConduit.h"
 #include "DocEventHandler.h"
 #include "Constants.h"
+#include "AssemblyUserData.h"
 
 // B4: Validate that System.Guid (C#) and ON_UUID are binary-compatible for P/Invoke.
 // Both are 16-byte structs with identical memory layout (Data1/Data2/Data3/Data4).
 // C# marshals 'ref Guid' as a pointer, which the C++ side receives as 'const ON_UUID*'.
 static_assert(sizeof(ON_UUID) == 16, "ON_UUID must be 16 bytes to match System.Guid layout");
 
-// Version: increment when API changes (4 = ComponentState enum + conduit improvements)
-static const int NATIVE_API_VERSION = 4;
+// Version: increment when API changes (5 = ON_AssemblyUserData persistence)
+static const int NATIVE_API_VERSION = 5;
 
 static bool g_initialized = false;
 static CVisibilityData* g_pVisData = nullptr;
@@ -25,6 +26,61 @@ static void RedrawActiveDoc()
 	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
 	if (pDoc)
 		pDoc->Redraw();
+}
+
+static CRhinoDoc* ActiveDoc()
+{
+	return RhinoApp().ActiveDoc();
+}
+
+static const CRhinoObject* FindDocObject(const ON_UUID* instanceId)
+{
+	if (!instanceId)
+		return nullptr;
+
+	CRhinoDoc* pDoc = ActiveDoc();
+	if (!pDoc)
+		return nullptr;
+
+	return pDoc->LookupObject(*instanceId);
+}
+
+static const ON_AssemblyUserData* FindAssemblyData(const ON_UUID* instanceId)
+{
+	const CRhinoObject* pObj = FindDocObject(instanceId);
+	if (!pObj)
+		return nullptr;
+
+	const ON_UserData* pData = pObj->Attributes().GetUserData(AssemblyUserDataId);
+	return ON_AssemblyUserData::Cast(pData);
+}
+
+static bool ModifyAttributesWithData(
+	const ON_UUID* instanceId,
+	const ON_AssemblyUserData* dataToAttach,
+	bool removeOnly)
+{
+	const CRhinoObject* pObj = FindDocObject(instanceId);
+	CRhinoDoc* pDoc = ActiveDoc();
+	if (!pObj || !pDoc)
+		return false;
+
+	CRhinoObjectAttributes attrs = pObj->Attributes();
+
+	if (ON_UserData* existing = attrs.GetUserData(AssemblyUserDataId))
+		delete existing;
+
+	if (!removeOnly && dataToAttach)
+	{
+		ON_AssemblyUserData* copy = new ON_AssemblyUserData(*dataToAttach);
+		if (!attrs.AttachUserData(copy))
+		{
+			delete copy;
+			return false;
+		}
+	}
+
+	return pDoc->ModifyObjectAttributes(CRhinoObjRef(pObj), attrs, true);
 }
 
 bool __stdcall NativeInit()
@@ -204,8 +260,8 @@ void DeserializeVisibilityState(const ON_wString& data, CVisibilityData& visData
 			continue;
 
 		std::string uuidStr = line.substr(0, firstPipe);
-		ON_UUID instanceId;
-		if (!ON_UuidFromString(uuidStr.c_str(), instanceId))
+		ON_UUID instanceId = ON_UuidFromString(uuidStr.c_str());
+		if (ON_UuidIsNil(instanceId))
 			continue;
 
 		size_t pos = firstPipe + 1;
@@ -243,7 +299,7 @@ void __stdcall PersistVisibilityState()
 		return;
 
 	ON_wString serialized = SerializeVisibilityState(*g_pVisData);
-	pDoc->SetDocTextString(RAO_DOC_KEY, serialized);
+	pDoc->SetUserString(RAO_DOC_KEY, serialized);
 }
 
 void __stdcall LoadVisibilityState()
@@ -258,7 +314,7 @@ void __stdcall LoadVisibilityState()
 		return;
 
 	ON_wString serialized;
-	pDoc->GetDocTextString(RAO_DOC_KEY, serialized);
+	pDoc->GetUserString(RAO_DOC_KEY, serialized);
 	DeserializeVisibilityState(serialized, *g_pVisData);
 }
 
@@ -321,4 +377,114 @@ int __stdcall GetComponentState(
 		return CS_VISIBLE;
 
 	return static_cast<int>(g_pVisData->GetState(*instanceId, path));
+}
+
+bool __stdcall AttachAssemblyData(
+	const ON_UUID* instanceId,
+	const ON_UUID* sourceDefId,
+	const wchar_t* sourceDefName,
+	const int* hiddenIndices,
+	int hiddenCount,
+	int componentCount)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!instanceId || !sourceDefId || hiddenCount < 0 || componentCount < 0)
+		return false;
+
+	ON_AssemblyUserData data;
+	data.m_sourceDefinitionId = *sourceDefId;
+	data.m_sourceDefinitionName = sourceDefName ? sourceDefName : L"";
+	data.m_componentCount = componentCount;
+	data.m_hiddenComponentIndices.Empty();
+
+	for (int i = 0; i < hiddenCount; ++i)
+	{
+		if (!hiddenIndices)
+			return false;
+		data.m_hiddenComponentIndices.Append(hiddenIndices[i]);
+	}
+
+	return ModifyAttributesWithData(instanceId, &data, false);
+}
+
+bool __stdcall HasAssemblyData(const ON_UUID* instanceId)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	return FindAssemblyData(instanceId) != nullptr;
+}
+
+bool __stdcall RemoveAssemblyData(const ON_UUID* instanceId)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	return ModifyAttributesWithData(instanceId, nullptr, true);
+}
+
+bool __stdcall GetSourceDefinitionId(
+	const ON_UUID* instanceId,
+	ON_UUID* outSourceDefId)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!outSourceDefId)
+		return false;
+
+	const ON_AssemblyUserData* pData = FindAssemblyData(instanceId);
+	if (!pData)
+		return false;
+
+	*outSourceDefId = pData->m_sourceDefinitionId;
+	return true;
+}
+
+int __stdcall GetSourceDefinitionName(
+	const ON_UUID* instanceId,
+	wchar_t* buffer,
+	int bufferSize)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	const ON_AssemblyUserData* pData = FindAssemblyData(instanceId);
+	if (!pData)
+		return -1;
+
+	const int required = pData->m_sourceDefinitionName.Length();
+	if (!buffer || bufferSize <= 0)
+		return required;
+
+	wcsncpy_s(buffer, static_cast<size_t>(bufferSize), pData->m_sourceDefinitionName, _TRUNCATE);
+	return required;
+}
+
+int __stdcall GetHiddenComponentIndices(
+	const ON_UUID* instanceId,
+	int* buffer,
+	int maxCount)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	const ON_AssemblyUserData* pData = FindAssemblyData(instanceId);
+	if (!pData)
+		return -1;
+
+	const int count = pData->m_hiddenComponentIndices.Count();
+	if (buffer && maxCount > 0)
+	{
+		const int toCopy = (count < maxCount) ? count : maxCount;
+		for (int i = 0; i < toCopy; ++i)
+			buffer[i] = pData->m_hiddenComponentIndices[i];
+	}
+
+	return count;
+}
+
+int __stdcall GetAssemblyComponentCount(const ON_UUID* instanceId)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	const ON_AssemblyUserData* pData = FindAssemblyData(instanceId);
+	if (!pData)
+		return -1;
+
+	return pData->m_componentCount;
 }

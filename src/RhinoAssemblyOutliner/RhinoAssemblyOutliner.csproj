@@ -16,7 +16,7 @@
     <AssemblyName>RhinoAssemblyOutliner</AssemblyName>
     <TargetExt>.rhp</TargetExt>
     <RootNamespace>RhinoAssemblyOutliner</RootNamespace>
-    <Version>1.0.0-rc.9</Version>
+    <Version>1.0.0-rc.10</Version>
     <Authors>Adrian Muff</Authors>
     <Company>Muff Software</Company>
     <Copyright>Copyright © 2026 Adrian Muff</Copyright>
@@ -44,5 +44,18 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>
+
+  <Target Name="CopyNativeAssemblyOutlinerDll" AfterTargets="Build">
+    <ItemGroup>
+      <NativeAssemblyOutlinerDll Include="..\RhinoAssemblyOutliner.native\x64\$(Configuration)\RhinoAssemblyOutliner.Native.dll"
+                                 Condition="Exists('..\RhinoAssemblyOutliner.native\x64\$(Configuration)\RhinoAssemblyOutliner.Native.dll')" />
+      <NativeAssemblyOutlinerDll Include="..\RhinoAssemblyOutliner.native\x64\Release\RhinoAssemblyOutliner.Native.dll"
+                                 Condition="'$(Configuration)' == 'Debug' and !Exists('..\RhinoAssemblyOutliner.native\x64\$(Configuration)\RhinoAssemblyOutliner.Native.dll') and Exists('..\RhinoAssemblyOutliner.native\x64\Release\RhinoAssemblyOutliner.Native.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NativeAssemblyOutlinerDll)"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="true"
+          Condition="'@(NativeAssemblyOutlinerDll)' != ''" />
+  </Target>
 
 </Project>

@@ -8,6 +8,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added (2026-04-30 — Sprint 4 Persistence Foundation)
+- Native `ON_AssemblyUserData` class for persisted per-instance assembly metadata
+- P/Invoke exports for attaching, removing, and reading source definition + hidden component state
+- Managed `AssemblyDataStore` facade with graceful fallback when the native DLL is unavailable
+- `VariantManager` writes assembly metadata on component-visibility reassignment and restores it after document open
+- Assembly tree builder reads persisted instance state before falling back to in-memory variant state
+- Unit-test baseline cleaned up to 315/315 passing
+
+### Fixed
+- Native C++ project now builds against the installed Rhino 8 SDK by replacing stale document user-string and display-pipeline API calls
+- `VariantManager.GetOrCreateVariant` serializes cache miss creation to avoid duplicate variants under concurrent access
+
 ### Fixed (2026-04-29 — Phase A: Build Cleanup)
 - `VariantGarbageCollector` Timer ambiguity (`System.Timers.Timer` vs `System.Threading.Timer`) resolved via aliased `using`
 - `KeyboardShortcutMappingTests` enums (`Modifiers`, `OutlinerAction`) made `public` so they can appear in `[Theory]` method signatures

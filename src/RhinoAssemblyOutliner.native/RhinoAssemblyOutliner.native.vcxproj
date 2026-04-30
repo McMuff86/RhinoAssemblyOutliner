@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="NativeApi.cpp" />
+    <ClCompile Include="AssemblyUserData.cpp" />
     <ClCompile Include="VisibilityConduit.cpp" />
     <ClCompile Include="VisibilityUserData.cpp" />
     <ClCompile Include="DocEventHandler.cpp" />
@@ -23,6 +24,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="NativeApi.h" />
+    <ClInclude Include="AssemblyUserData.h" />
     <ClInclude Include="VisibilityData.h" />
     <ClInclude Include="VisibilityConduit.h" />
     <ClInclude Include="VisibilityUserData.h" />

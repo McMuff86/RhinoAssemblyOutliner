@@ -72,6 +72,7 @@ public class VariantManagerTests
         private readonly ConcurrentDictionary<Guid, Guid> _reverseMap = new();
         private readonly Dictionary<Guid, string> _definitionNames = new();
         private readonly Dictionary<string, Guid> _definitionByName = new();
+        private readonly object _lock = new();
 
         public void RegisterDefinition(Guid id, string name)
         {
@@ -87,22 +88,28 @@ public class VariantManagerTests
             if (_cache.TryGetValue(key, out var cached))
                 return cached;
 
-            var sourceName = _definitionNames.GetValueOrDefault(sourceDefId, "Unknown");
-            var variantName = $"{VariantPrefix}{sourceName}_{state.ToHexHash()}";
-
-            // Check if already exists by name
-            if (_definitionByName.TryGetValue(variantName, out var existingId))
+            lock (_lock)
             {
-                _cache[key] = existingId;
-                _reverseMap[existingId] = sourceDefId;
-                return existingId;
-            }
+                if (_cache.TryGetValue(key, out cached))
+                    return cached;
 
-            var variantId = Guid.NewGuid();
-            RegisterDefinition(variantId, variantName);
-            _cache[key] = variantId;
-            _reverseMap[variantId] = sourceDefId;
-            return variantId;
+                var sourceName = _definitionNames.GetValueOrDefault(sourceDefId, "Unknown");
+                var variantName = $"{VariantPrefix}{sourceName}_{state.ToHexHash()}";
+
+                // Check if already exists by name (saved from a previous session).
+                if (_definitionByName.TryGetValue(variantName, out var existingId))
+                {
+                    _cache[key] = existingId;
+                    _reverseMap[existingId] = sourceDefId;
+                    return existingId;
+                }
+
+                var variantId = Guid.NewGuid();
+                RegisterDefinition(variantId, variantName);
+                _cache[key] = variantId;
+                _reverseMap[variantId] = sourceDefId;
+                return variantId;
+            }
         }
 
         public Guid? GetSourceDefinitionId(Guid variantDefId)
@@ -346,7 +353,7 @@ public class VariantManagerTests
     }
 
     [Fact]
-    public void InvalidateCache_AfterInvalidation_NewVariantCreated()
+    public void InvalidateCache_AfterInvalidation_ReusesExistingDefinitionByName()
     {
         var state = VisibilityState.Create(new[] { 1 }, 5);
         var id1 = _manager.GetOrCreateVariant(_motorDefId, state);
@@ -354,8 +361,9 @@ public class VariantManagerTests
         _manager.InvalidateCache(_motorDefId);
         var id2 = _manager.GetOrCreateVariant(_motorDefId, state);
 
-        // After invalidation, a new variant should be created (different Guid)
-        Assert.NotEqual(id1, id2);
+        // Invalidation clears in-memory mappings only. If the variant definition
+        // still exists in the document, the manager rehydrates the cache by name.
+        Assert.Equal(id1, id2);
     }
 
     [Fact]

@@ -23,7 +23,7 @@ void CDocEventHandler::OnEndOpenDocument(CRhinoDoc& doc, const wchar_t* filename
 
 	// Read visibility state from document user strings
 	ON_wString serialized;
-	doc.GetDocTextString(RAO_DOC_KEY, serialized);
+	doc.GetUserString(RAO_DOC_KEY, serialized);
 	DeserializeVisibilityState(serialized, m_visData);
 }
 
@@ -33,7 +33,7 @@ void CDocEventHandler::OnBeginSaveDocument(CRhinoDoc& doc, const wchar_t* filena
 
 	// Serialize visibility state to document user strings
 	ON_wString serialized = SerializeVisibilityState(m_visData);
-	doc.SetDocTextString(RAO_DOC_KEY, serialized);
+	doc.SetUserString(RAO_DOC_KEY, serialized);
 }
 
 void CDocEventHandler::OnCloseDocument(CRhinoDoc& doc)

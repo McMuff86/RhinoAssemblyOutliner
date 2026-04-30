@@ -40,9 +40,34 @@ public interface IVariantManager
     void InvalidateCache(Guid sourceDefinitionId);
 
     /// <summary>
+    /// Clears all in-memory variant mappings.
+    /// </summary>
+    void ClearCache();
+
+    /// <summary>
     /// Returns the VisibilityState that produced a given variant definition,
     /// or null if the variant is unknown to this manager (e.g. loaded from a
     /// .3dm file before ON_UserData persistence is implemented).
     /// </summary>
     VisibilityState? GetVariantState(Guid variantDefinitionId);
+
+    /// <summary>
+    /// Returns the persisted VisibilityState for a specific instance, if one exists.
+    /// </summary>
+    VisibilityState? GetVisibilityStateForInstance(Guid instanceId);
+
+    /// <summary>
+    /// Returns the persisted source definition id for a specific instance, if one exists.
+    /// </summary>
+    Guid? GetPersistedSourceDefinitionId(Guid instanceId);
+
+    /// <summary>
+    /// Returns the persisted source definition name for a specific instance, if one exists.
+    /// </summary>
+    string? GetPersistedSourceDefinitionName(Guid instanceId);
+
+    /// <summary>
+    /// Rehydrates saved assembly metadata after a document is opened.
+    /// </summary>
+    int RestorePersistedVariants(RhinoDoc doc);
 }

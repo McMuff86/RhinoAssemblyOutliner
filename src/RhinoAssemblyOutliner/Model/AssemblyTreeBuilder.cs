@@ -186,7 +186,7 @@ public class AssemblyTreeBuilder
         // If this instance points at a variant definition, present it as the
         // source definition. The variant exists only as an implementation detail
         // of the cloning strategy — users should see and edit the source.
-        var sourceDef = ResolveSourceDefinition(actualDef);
+        var sourceDef = ResolveSourceDefinition(instance, actualDef);
         if (sourceDef == null || sourceDef.IsDeleted) return null;
 
         // Prevent infinite recursion from circular/self-referencing block definitions
@@ -219,7 +219,8 @@ public class AssemblyTreeBuilder
         {
             node = new BlockInstanceNode(instance, sourceDef, instanceNumber)
             {
-                TotalInstanceCount = totalCount
+                TotalInstanceCount = totalCount,
+                IsVariantActive = actualDef.Id != sourceDef.Id
             };
         }
         catch (Exception ex)
@@ -231,7 +232,8 @@ public class AssemblyTreeBuilder
         // Determine which component indices are hidden on THIS instance.
         // If the instance is on a variant we know about, ask the VariantManager
         // for the state. Otherwise everything is visible (instance is on source).
-        var hiddenIndices = ResolveHiddenIndicesForInstance(actualDef, sourceDef);
+        var hiddenIndices = ResolveHiddenIndicesForInstance(instance, actualDef, sourceDef);
+        node.IsVariantActive = node.IsVariantActive || hiddenIndices.Count > 0;
 
         // Recursively process nested blocks within this definition
         ProcessDefinitionContents(node, sourceDef, depth + 1, hiddenIndices);
@@ -246,14 +248,32 @@ public class AssemblyTreeBuilder
     /// Maps a definition that may be a variant (__aov_<source>_<hash>) back to
     /// its source. Falls back to the input if no source is found.
     /// </summary>
-    private InstanceDefinition? ResolveSourceDefinition(InstanceDefinition def)
+    private InstanceDefinition? ResolveSourceDefinition(InstanceObject instance, InstanceDefinition def)
     {
         if (def == null) return null;
+
+        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
+        if (vm != null)
+        {
+            var persistedSourceId = vm.GetPersistedSourceDefinitionId(instance.Id);
+            if (persistedSourceId.HasValue)
+            {
+                var byPersistedId = _doc.InstanceDefinitions.FindId(persistedSourceId.Value);
+                if (byPersistedId != null && !byPersistedId.IsDeleted) return byPersistedId;
+            }
+
+            var persistedSourceName = vm.GetPersistedSourceDefinitionName(instance.Id);
+            if (!string.IsNullOrWhiteSpace(persistedSourceName))
+            {
+                var byPersistedName = _doc.InstanceDefinitions.Find(persistedSourceName);
+                if (byPersistedName != null && !byPersistedName.IsDeleted) return byPersistedName;
+            }
+        }
+
         if (!def.Name.StartsWith(VariantManager.VariantPrefix, StringComparison.Ordinal))
             return def;
 
         // Ask the plugin-wide VariantManager first (authoritative).
-        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
         if (vm != null)
         {
             var sourceId = vm.GetSourceDefinitionId(_doc, def.Id);
@@ -279,12 +299,16 @@ public class AssemblyTreeBuilder
     /// Returns the set of source-component indices that are hidden on this
     /// instance. Empty set means all components visible.
     /// </summary>
-    private HashSet<int> ResolveHiddenIndicesForInstance(InstanceDefinition actualDef, InstanceDefinition sourceDef)
+    private HashSet<int> ResolveHiddenIndicesForInstance(InstanceObject instance, InstanceDefinition actualDef, InstanceDefinition sourceDef)
     {
+        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
+        var persistedState = vm?.GetVisibilityStateForInstance(instance.Id);
+        if (persistedState != null)
+            return new HashSet<int>(persistedState.HiddenIndices);
+
         if (actualDef == null || actualDef.Id == sourceDef.Id)
             return new HashSet<int>(); // instance on source → nothing hidden
 
-        var vm = RhinoAssemblyOutlinerPlugin.Instance?.VariantManager;
         var state = vm?.GetVariantState(actualDef.Id);
         if (state != null)
             return new HashSet<int>(state.HiddenIndices);

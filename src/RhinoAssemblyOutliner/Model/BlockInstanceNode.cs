@@ -39,6 +39,11 @@ public class BlockInstanceNode : AssemblyNode
     public int ComponentIndex { get; set; } = -1;
 
     /// <summary>
+    /// True when this instance is currently backed by an internal variant definition.
+    /// </summary>
+    public bool IsVariantActive { get; set; }
+
+    /// <summary>
     /// Total count of instances of this definition in the document.
     /// </summary>
     public int TotalInstanceCount { get; set; }
@@ -168,7 +173,9 @@ public class BlockInstanceNode : AssemblyNode
     {
         var summary = $"Block: {DefinitionName}\n";
         summary += $"Instance: #{InstanceNumber} of {TotalInstanceCount}\n";
-        summary += $"Type: {LinkType}\n";
+        summary += IsVariantActive
+            ? $"Type: {LinkType} (variant active)\n"
+            : $"Type: {LinkType}\n";
         
         if (Layer != null)
         {

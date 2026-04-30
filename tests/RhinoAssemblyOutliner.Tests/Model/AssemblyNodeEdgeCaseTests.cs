@@ -160,7 +160,6 @@ public class AssemblyNodeEdgeCaseTests
         Assert.Single(root.Children);
         Assert.Same(b, root.Children[0]);
         Assert.Same(b, a.Parent);
-        Assert.Equal(3, a1x.Depth); // b(1) -> a(2) -> a1(3) -> a1x... wait
         // root(0) -> b(1) -> a(2) -> a1(3) -> a1x(4)
         Assert.Equal(4, a1x.Depth);
     }

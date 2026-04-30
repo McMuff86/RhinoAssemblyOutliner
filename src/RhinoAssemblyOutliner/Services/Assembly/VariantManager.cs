@@ -49,6 +49,30 @@ public class VariantManager : IVariantManager
     /// instance currently points at a variant.
     /// </summary>
     private readonly ConcurrentDictionary<Guid, VisibilityState> _variantStates = new();
+    private readonly IAssemblyDataStore _dataStore;
+
+    /// <summary>
+    /// Serializes cache miss handling. Rhino document mutation is not safe to
+    /// run concurrently, and ConcurrentDictionary alone cannot protect the
+    /// create-and-register sequence.
+    /// </summary>
+    private readonly object _createLock = new();
+
+    /// <summary>
+    /// Creates a variant manager backed by the native assembly data store.
+    /// </summary>
+    public VariantManager()
+        : this(new AssemblyDataStore())
+    {
+    }
+
+    /// <summary>
+    /// Creates a variant manager with an explicit assembly data store.
+    /// </summary>
+    public VariantManager(IAssemblyDataStore dataStore)
+    {
+        _dataStore = dataStore ?? throw new ArgumentNullException(nameof(dataStore));
+    }
 
     /// <inheritdoc />
     public Guid GetOrCreateVariant(RhinoDoc doc, Guid sourceDefinitionId, VisibilityState state)
@@ -76,21 +100,54 @@ public class VariantManager : IVariantManager
             _variantStates.TryRemove(cachedId, out _);
         }
 
-        // Create new variant definition
-        var variantId = CreateVariantDefinition(doc, sourceDefinitionId, state);
+        lock (_createLock)
+        {
+            // Another caller may have created the variant while we were waiting.
+            if (_cache.TryGetValue(key, out cachedId))
+            {
+                var cachedDef = doc.InstanceDefinitions.FindId(cachedId);
+                if (cachedDef != null && !cachedDef.IsDeleted)
+                    return cachedId;
 
-        // Cache it
-        _cache[key] = variantId;
-        _reverseMap[variantId] = sourceDefinitionId;
-        _variantStates[variantId] = state;
+                _cache.TryRemove(key, out _);
+                _reverseMap.TryRemove(cachedId, out _);
+                _variantStates.TryRemove(cachedId, out _);
+            }
 
-        return variantId;
+            // Create new variant definition
+            var variantId = CreateVariantDefinition(doc, sourceDefinitionId, state);
+
+            // Cache it
+            _cache[key] = variantId;
+            _reverseMap[variantId] = sourceDefinitionId;
+            _variantStates[variantId] = state;
+
+            return variantId;
+        }
     }
 
     /// <inheritdoc />
     public VisibilityState? GetVariantState(Guid variantDefinitionId)
     {
         return _variantStates.TryGetValue(variantDefinitionId, out var state) ? state : null;
+    }
+
+    /// <inheritdoc />
+    public VisibilityState? GetVisibilityStateForInstance(Guid instanceId)
+    {
+        return _dataStore.GetVisibilityState(instanceId);
+    }
+
+    /// <inheritdoc />
+    public Guid? GetPersistedSourceDefinitionId(Guid instanceId)
+    {
+        return _dataStore.GetSourceDefinitionId(instanceId);
+    }
+
+    /// <inheritdoc />
+    public string? GetPersistedSourceDefinitionName(Guid instanceId)
+    {
+        return _dataStore.GetSourceDefinitionName(instanceId);
     }
 
     /// <inheritdoc />
@@ -103,11 +160,15 @@ public class VariantManager : IVariantManager
         if (instanceObj == null)
             throw new InvalidOperationException($"Instance {instanceId} not found or is not an InstanceObject.");
 
-        // Determine the source definition (might already be a variant)
-        var currentDefId = instanceObj.InstanceDefinition.Id;
-        var sourceDefId = GetSourceDefinitionId(doc, currentDefId) ?? currentDefId;
-        var sourceDef = doc.InstanceDefinitions.FindId(sourceDefId);
-        var sourceName = sourceDef?.Name ?? string.Empty;
+        // Determine the source definition. Persisted UserData wins after
+        // Save/Load; otherwise fall back to the in-memory reverse map or the
+        // current definition for source instances.
+        var sourceDef = ResolveSourceDefinitionForInstance(doc, instanceObj);
+        if (sourceDef == null || sourceDef.IsDeleted)
+            throw new InvalidOperationException($"Source definition for instance {instanceId} not found.");
+
+        var sourceDefId = sourceDef.Id;
+        var sourceName = sourceDef.Name ?? string.Empty;
 
         // Get or create the variant for the desired state
         var variantDefId = GetOrCreateVariant(doc, sourceDefId, state);
@@ -125,6 +186,11 @@ public class VariantManager : IVariantManager
         // Replace(Guid, GeometryBase, bool) — third arg is ignoreModes; false respects layer/lock state.
         if (!doc.Objects.Replace(instanceId, newGeometry, false))
             throw new InvalidOperationException($"Failed to replace instance {instanceId}.");
+
+        if (state.IsAllVisible)
+            _dataStore.Remove(instanceId);
+        else
+            _dataStore.Attach(instanceId, sourceDefId, sourceName, state);
 
         // Mask the variant name in Rhino's native UI: stamp the source definition
         // name as the InstanceObject's Attributes.Name. Object Properties will then
@@ -197,6 +263,66 @@ public class VariantManager : IVariantManager
         }
     }
 
+    /// <inheritdoc />
+    public void ClearCache()
+    {
+        _cache.Clear();
+        _reverseMap.Clear();
+        _variantStates.Clear();
+    }
+
+    /// <inheritdoc />
+    public int RestorePersistedVariants(RhinoDoc doc)
+    {
+        if (doc == null) throw new ArgumentNullException(nameof(doc));
+        if (!_dataStore.IsAvailable)
+            return 0;
+
+        var instanceIds = doc.Objects
+            .GetObjectList(ObjectType.InstanceReference)
+            .OfType<InstanceObject>()
+            .Select(instance => instance.Id)
+            .ToList();
+
+        var restored = 0;
+        foreach (var instanceId in instanceIds)
+        {
+            if (doc.Objects.FindId(instanceId) is not InstanceObject instance)
+                continue;
+
+            if (!_dataStore.Has(instance.Id))
+                continue;
+
+            var state = _dataStore.GetVisibilityState(instance.Id);
+            if (state == null)
+            {
+                RhinoApp.WriteLine($"AssemblyOutliner: Invalid assembly data on instance {instance.Id}; removing metadata.");
+                _dataStore.Remove(instance.Id);
+                continue;
+            }
+
+            var sourceDef = ResolveSourceDefinitionForInstance(doc, instance);
+            if (sourceDef == null || sourceDef.IsDeleted)
+            {
+                RhinoApp.WriteLine($"AssemblyOutliner: Source definition for instance {instance.Id} not found; removing metadata.");
+                _dataStore.Remove(instance.Id);
+                continue;
+            }
+
+            try
+            {
+                ReassignInstance(doc, instance.Id, state);
+                restored++;
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"AssemblyOutliner: Failed to restore instance {instance.Id}: {ex.Message}");
+            }
+        }
+
+        return restored;
+    }
+
     /// <summary>
     /// Creates a new variant definition by cloning the source and keeping only visible components.
     /// </summary>
@@ -255,5 +381,28 @@ public class VariantManager : IVariantManager
                 $"Failed to create variant definition '{variantName}'.");
 
         return doc.InstanceDefinitions[defIndex].Id;
+    }
+
+    private InstanceDefinition? ResolveSourceDefinitionForInstance(RhinoDoc doc, InstanceObject instanceObj)
+    {
+        var persistedSourceId = _dataStore.GetSourceDefinitionId(instanceObj.Id);
+        if (persistedSourceId.HasValue)
+        {
+            var persistedById = doc.InstanceDefinitions.FindId(persistedSourceId.Value);
+            if (persistedById != null && !persistedById.IsDeleted)
+                return persistedById;
+        }
+
+        var persistedSourceName = _dataStore.GetSourceDefinitionName(instanceObj.Id);
+        if (!string.IsNullOrWhiteSpace(persistedSourceName))
+        {
+            var persistedByName = doc.InstanceDefinitions.Find(persistedSourceName);
+            if (persistedByName != null && !persistedByName.IsDeleted)
+                return persistedByName;
+        }
+
+        var currentDefId = instanceObj.InstanceDefinition.Id;
+        var sourceDefId = GetSourceDefinitionId(doc, currentDefId) ?? currentDefId;
+        return doc.InstanceDefinitions.FindId(sourceDefId);
     }
 }

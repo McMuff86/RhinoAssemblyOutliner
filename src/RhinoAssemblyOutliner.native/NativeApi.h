@@ -73,4 +73,45 @@ extern "C"
 		const ON_UUID* instanceId,
 		const char* path
 	);
+
+	/// Attach persisted assembly metadata to an instance object.
+	NATIVE_API bool __stdcall AttachAssemblyData(
+		const ON_UUID* instanceId,
+		const ON_UUID* sourceDefId,
+		const wchar_t* sourceDefName,
+		const int* hiddenIndices,
+		int hiddenCount,
+		int componentCount
+	);
+
+	/// Check whether an instance object has persisted assembly metadata.
+	NATIVE_API bool __stdcall HasAssemblyData(const ON_UUID* instanceId);
+
+	/// Remove persisted assembly metadata from an instance object.
+	NATIVE_API bool __stdcall RemoveAssemblyData(const ON_UUID* instanceId);
+
+	/// Get the persisted source definition id for an instance object.
+	NATIVE_API bool __stdcall GetSourceDefinitionId(
+		const ON_UUID* instanceId,
+		ON_UUID* outSourceDefId
+	);
+
+	/// Get the persisted source definition name.
+	/// Returns required length, or -1 when no metadata is attached.
+	NATIVE_API int __stdcall GetSourceDefinitionName(
+		const ON_UUID* instanceId,
+		wchar_t* buffer,
+		int bufferSize
+	);
+
+	/// Get persisted hidden component indices.
+	/// Returns total hidden count, or -1 when no metadata is attached.
+	NATIVE_API int __stdcall GetHiddenComponentIndices(
+		const ON_UUID* instanceId,
+		int* buffer,
+		int maxCount
+	);
+
+	/// Get persisted source component count.
+	NATIVE_API int __stdcall GetAssemblyComponentCount(const ON_UUID* instanceId);
 }

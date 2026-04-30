@@ -272,7 +272,7 @@ void CVisibilityConduit::DrawNestedFiltered(
 
 void CVisibilityConduit::DrawSelectionHighlights(CRhinoDisplayPipeline& dp)
 {
-	CRhinoDoc* pDoc = dp.GetRhinoDoc();
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
 	if (!pDoc)
 		return;
 
@@ -336,12 +336,7 @@ void CVisibilityConduit::CalcVisibleBoundingBox()
 	if (!m_pChannelAttrs)
 		return;
 
-	// Try to get doc from channel attrs viewport, fall back to ActiveDoc
-	CRhinoDoc* pDoc = nullptr;
-	if (m_pChannelAttrs->m_pDP)
-		pDoc = m_pChannelAttrs->m_pDP->GetRhinoDoc();
-	if (!pDoc)
-		pDoc = RhinoApp().ActiveDoc();
+	CRhinoDoc* pDoc = RhinoApp().ActiveDoc();
 	if (!pDoc)
 		return;
 

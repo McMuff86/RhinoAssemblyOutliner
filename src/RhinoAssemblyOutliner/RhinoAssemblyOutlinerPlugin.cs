@@ -56,11 +56,14 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
         RhinoApp.WriteLine("RhinoAssemblyOutliner plugin loaded.");
         
         // Panel is registered in OpenOutlinerCommand constructor
+        EnsureNativeModuleLoaded();
 
         // --- Sprint 3: Assembly lifecycle services ---
         _variantManager = new VariantManager();
         _garbageCollector = new VariantGarbageCollector();
         _assemblyEventHandler = new AssemblyEventHandler(_garbageCollector);
+        _assemblyEventHandler.VariantRefreshRequired += OnVariantRefreshRequired;
+        _assemblyEventHandler.CacheClearRequired += OnCacheClearRequired;
         _assemblyEventHandler.Subscribe();
         
         // Register event handlers for document changes
@@ -69,6 +72,25 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
         RhinoDoc.CloseDocument += OnCloseDocument;
         
         return LoadReturnCode.Success;
+    }
+
+    private static void EnsureNativeModuleLoaded()
+    {
+        if (!NativeVisibilityInterop.IsNativeDllAvailable())
+        {
+            RhinoApp.WriteLine("AssemblyOutliner: Native module not found; persistence will be unavailable.");
+            return;
+        }
+
+        try
+        {
+            var version = NativeVisibilityInterop.GetNativeVersion();
+            RhinoApp.WriteLine($"AssemblyOutliner: Native module v{version} loaded.");
+        }
+        catch (Exception ex)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Failed to load native module: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -84,8 +106,27 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     /// </summary>
     private void OnEndOpenDocument(object sender, DocumentOpenEventArgs e)
     {
-        // Refresh the assembly tree when a document opens
-        RhinoApp.WriteLine("Document opened - Assembly tree refresh triggered.");
+        if (e.Document == null)
+        {
+            RhinoApp.WriteLine("Document opened - Assembly tree refresh triggered.");
+            return;
+        }
+
+        var restored = 0;
+        using (_assemblyEventHandler?.Suspend())
+        {
+            restored = VariantManager.RestorePersistedVariants(e.Document);
+        }
+
+        if (restored > 0)
+        {
+            RhinoApp.WriteLine($"AssemblyOutliner: Restored {restored} persisted assembly instance(s).");
+            _garbageCollector?.ScheduleCollection(e.Document);
+        }
+        else
+        {
+            RhinoApp.WriteLine("Document opened - Assembly tree refresh triggered.");
+        }
     }
 
     /// <summary>
@@ -97,6 +138,16 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
         RhinoApp.WriteLine("Document closed - Assembly tree cleared.");
     }
 
+    private void OnVariantRefreshRequired(object? sender, VariantRefreshEventArgs e)
+    {
+        _variantManager?.InvalidateCache(e.SourceDefinitionId);
+    }
+
+    private void OnCacheClearRequired(object? sender, EventArgs e)
+    {
+        _variantManager?.ClearCache();
+    }
+
     /// <summary>
     /// Called when the plugin is being unloaded.
     /// Cleans up native resources and unsubscribes all events.
@@ -104,6 +155,12 @@ public class RhinoAssemblyOutlinerPlugin : PlugIn
     protected override void OnShutdown()
     {
         // --- Sprint 3: Clean up assembly lifecycle services ---
+        if (_assemblyEventHandler != null)
+        {
+            _assemblyEventHandler.VariantRefreshRequired -= OnVariantRefreshRequired;
+            _assemblyEventHandler.CacheClearRequired -= OnCacheClearRequired;
+        }
+
         _assemblyEventHandler?.Dispose();
         _assemblyEventHandler = null;
 
