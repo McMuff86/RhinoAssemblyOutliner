@@ -1,156 +1,260 @@
-# Sprint 3 Smoke Test — Definition Cloning live in Rhino
+# Sprint 3/4 Rhino Smoke Test - Definition Cloning + Persistence Roundtrip
 
-**Branch:** `feature/cpp-assembly-object`
-**Commit:** `82143d7` (Phase A)
-**Ziel:** Erstmals den `VariantManager`-Pfad in echtem Rhino 8 ausführen — vor Sprint 3 lief er nie wegen Build-Errors.
+**Branch:** `main`  
+**Ziel:** Den produktionskritischen Pfad in Rhino 8 validieren: Definition Cloning aus Sprint 3 plus `ON_AssemblyUserData` Save/Load-Roundtrip aus Sprint 4.
 
-Der Test ist ein Smoke Test, kein Vollabdeckungstest. Wir wollen zwei Fragen beantworten:
+Der Test ist ein manueller Smoke- und Roundtrip-Test, kein Vollabdeckungstest. Er beantwortet drei Fragen:
 
-1. **Bricht etwas?** Crashes, Exceptions, eingefrorenes Rhino, kaputter Block.
-2. **Stimmt das mentale Modell?** Variant-Definitionen entstehen, werden geteilt, werden geräumt — und Undo bringt alles zurück.
+1. **Läuft der VariantManager-Pfad live in Rhino?** Per-Instance Visibility erzeugt und teilt Variant-Definitionen korrekt.
+2. **Persistiert Sprint 4 den State?** Nach Save, Rhino schließen und Reopen zeigen Viewport und Outliner denselben Hidden-State.
+3. **Degradiert das File sauber?** Ohne Plugin bleibt die gespeicherte Variant-Geometrie sichtbar und das File bleibt öffnungsfähig.
 
-Wenn beides ✅ ist, ist Sprint 3 echt fertig und Sprint 4 (ON_UserData) kann starten.
+Wenn dieser Test grün ist, ist die Save/Load-Persistence production-validiert genug für die nächste Sprint-Arbeit.
 
 ---
 
-## 0. Vorbereitung (5 min)
+## 0. Build und Artefakte prüfen
 
-```bash
-# In Repo-Root, Bash:
+In Repo-Root:
+
+```powershell
 dotnet build
 ```
 
-Erwartung: 0 Errors. (Warnings sind ok.)
+Erwartung: 0 Errors. Warnings sind nur dann ein Stopper, wenn sie neue Persistence-, P/Invoke- oder Native-Copy-Probleme betreffen.
 
-Plugin in Rhino 8 laden:
+Native Release Build, falls MSBuild/VS 2022 verfügbar ist:
+
+```powershell
+msbuild src\RhinoAssemblyOutliner.native\RhinoAssemblyOutliner.native.vcxproj /p:Configuration=Release /p:Platform=x64
+dotnet build
+```
+
+Der zweite `dotnet build` ist wichtig, weil das C#-Projekt die Native DLL neben das `.rhp` kopiert.
+
+Prüfe danach:
+
+```powershell
+Test-Path src\RhinoAssemblyOutliner.native\x64\Release\RhinoAssemblyOutliner.Native.dll
+Test-Path src\RhinoAssemblyOutliner\bin\Debug\net7.0-windows\RhinoAssemblyOutliner.rhp
+Test-Path src\RhinoAssemblyOutliner\bin\Debug\net7.0-windows\RhinoAssemblyOutliner.Native.dll
+```
+
+Alle drei sollten `True` liefern. Wenn die Native DLL nicht neben dem `.rhp` liegt, stoppe hier: Sprint-4-Persistence kann in Rhino nicht laufen.
+
+---
+
+## 1. Plugin in Rhino 8 laden
 
 1. Rhino 8 starten, neues leeres Dokument.
-2. Befehl `_-PlugInManager` → Install → wähle:
+2. Befehl `_-PlugInManager` -> Install -> wähle:
    `src\RhinoAssemblyOutliner\bin\Debug\net7.0-windows\RhinoAssemblyOutliner.rhp`
-3. Falls schon installiert: Plugin auf "Enabled" setzen, oder Rhino neustarten.
-4. Befehl `AssemblyOutliner` → Panel sollte dockbar erscheinen.
+3. Falls schon installiert: Plugin auf "Enabled" setzen oder Rhino neu starten.
+4. In der Command History muss sinngemäß stehen:
+   - `RhinoAssemblyOutliner plugin loaded.`
+   - `AssemblyOutliner: Native module v5 loaded.`
+5. Befehl `AssemblyOutliner` ausführen. Das Panel sollte dockbar erscheinen.
 
-**Falls das Panel nicht öffnet** → Stop. Lies die Rhino-Command-History; melde mir den Fehler.
+**Stopper:** Wenn die History `Native module not found` oder `Failed to load native module` meldet, erst den Build/Copy-Schritt reparieren. Ohne Native DLL ist der Roundtrip-Test nicht aussagekräftig.
 
 ---
 
-## 1. Testblock anlegen (5 min)
+## 2. Testblock mit drei Instanzen anlegen
 
-Ein einfaches Test-Assembly mit ≥3 Komponenten und ≥2 Instanzen ist nötig.
+Ein einfaches Test-Assembly mit mindestens drei Komponenten und drei Instanzen ist nötig.
 
 1. Zeichne im aktiven Layer:
-   - eine Box (`_Box`) — wird zu *Gehäuse*
-   - einen Zylinder (`_Cylinder`) — wird zu *Welle*
-   - eine Kugel (`_Sphere`) — wird zu *Lager*
-2. Selektiere alle drei → `_-Block` → Name `Motor_v1`, Basispunkt = WCS-Origin, "Convert" wählen (so wird die Geometrie zur Definition).
-3. Befehl `_Insert` → `Motor_v1` → an drei Punkten platzieren. Du hast jetzt **3 Instanzen** derselben Definition.
-4. Im Outliner-Panel: `Refresh` (oder Panel schliessen/öffnen). Du solltest 3 `Motor_v1`-Knoten sehen, jeder mit 3 Children (Box/Cylinder/Sphere).
+   - eine Box (`_Box`) als `Gehäuse`
+   - einen Zylinder (`_Cylinder`) als `Welle`
+   - eine Kugel (`_Sphere`) als `Lager`
+2. Selektiere alle drei -> `_-Block` -> Name `Motor_v1`, Basispunkt = WCS-Origin, "Convert" wählen.
+3. Befehl `_Insert` -> `Motor_v1` -> an drei unterschiedlichen Punkten platzieren. Du hast jetzt **3 Instanzen derselben Definition**.
+4. Im Outliner-Panel `Refresh` klicken. Du solltest 3 `Motor_v1`-Knoten sehen, jeder mit 3 Children.
 
-**Wenn der Tree leer bleibt oder Children fehlen** → Stop. Screenshot + Rhino-Command-History an mich.
-
----
-
-## 2. Smoke Test — Per-Instance Visibility (10 min)
-
-Das ist der eigentliche Sprint-3-Pfad: `ComponentNode.IsVisible` togglen → `VariantManager.ReassignInstance` → neue Variant-Definition.
-
-### 2.1 Eine Komponente auf einer Instanz ausblenden
-
-1. Klicke das 👁-Icon neben `Sphere` *unter Instanz #1*.
-2. **Erwartet:**
-   - Sphere verschwindet im Viewport — **nur an Instanz #1**, nicht an #2 oder #3
-   - Im Block Manager (`_BlockManager`) erscheint eine neue Definition mit Namen `__aov_Motor_v1_<8hex>`
-   - Outliner: 👁 wird zu ◯ bei Sphere unter Instanz #1; das übergeordnete Motor_v1 zeigt ◐ (mixed)
-
-**Wenn die Sphere an *allen* Instanzen verschwindet** → Variant-Definition wurde nicht erstellt, alle hängen noch an der Source. Bug, Stop.
-
-**Wenn Rhino crasht oder einfriert** → Stop. Cmd History + ggf. Crash-Dump.
-
-### 2.2 Deduplizierung (gleicher State teilt Variante)
-
-3. Blende auf Instanz #2 ebenfalls die Sphere aus (gleiche Komponente).
-4. **Erwartet:** Block Manager zeigt **immer noch nur eine** `__aov_…`-Definition. Beide Instanzen zeigen auf dieselbe Variante.
-
-**Wenn zwei `__aov_…` Definitionen mit gleichem Hash entstehen** → Cache funktioniert nicht; Bug.
-
-### 2.3 Verschiedene States = verschiedene Varianten
-
-5. Auf Instanz #3 die *Box* ausblenden (nicht die Sphere).
-6. **Erwartet:** Block Manager zeigt jetzt **zwei** `__aov_…`-Definitionen mit verschiedenen Hashes.
-
-### 2.4 Zurück zur Quelle
-
-7. Auf Instanz #1 die Sphere wieder einblenden.
-8. **Erwartet:** Instanz #1 zeigt wieder auf die Original-Definition `Motor_v1` (Block Manager: rechtsklick → "Find Instances" prüft das).
-9. Nach ca. 5 Sekunden (GC-Debounce) sollte die nicht mehr referenzierte `__aov_…`-Definition aus dem Block Manager verschwinden.
-
-**Wenn die Definition nach 10s noch da ist** → GC läuft nicht. Notiere; nicht kritisch, aber Sprint-3-Bug.
+**Stopper:** Wenn der Tree leer bleibt oder Children fehlen, Screenshot und Rhino Command History sichern.
 
 ---
 
-## 3. Undo / Redo (5 min)
+## 3. Sprint-3 Smoke: Per-Instance Visibility
 
-Der `UndoHelper` umschliesst jede Visibility-Änderung in einem Undo-Record.
+### 3.1 Unterschiedliche Komponenten pro Instanz ausblenden
 
-1. Mit allen Instanzen sichtbar starten (Klick `Show All` im Panel).
-2. Sphere auf Instanz #1 ausblenden.
-3. Box auf Instanz #2 ausblenden.
-4. Welle auf Instanz #3 ausblenden.
-5. **3× Ctrl+Z** drücken.
-   - **Erwartet:** Jeder Undo macht *eine* Änderung rückgängig, in umgekehrter Reihenfolge. Nach dem 3. Undo sind alle Komponenten wieder sichtbar.
-6. **3× Ctrl+Y** (Redo).
-   - **Erwartet:** Die drei Hides werden wieder hergestellt.
+1. Instanz #1: `Lager`/Sphere ausblenden.
+2. Instanz #2: `Gehäuse`/Box ausblenden.
+3. Instanz #3: `Welle`/Cylinder ausblenden.
 
-**Wenn ein Undo mehrere Schritte rückgängig macht** → Undo-Records sind nicht atomar; Bug.
-**Wenn ein Undo Rhino in inkonsistenten Zustand bringt (Variant-Def zeigt auf nichts mehr)** → Notiere genau den Schritt; das ist Sprint-3-Stress-Test-Material.
+Erwartung:
 
----
+- Im Viewport fehlt pro Instanz nur die jeweils ausgeblendete Komponente.
+- Andere Instanzen derselben Source-Definition bleiben unverändert.
+- Im Outliner ist pro Instanz genau das passende Child hidden.
+- Die Elternknoten zeigen mixed state, solange nicht alle Children sichtbar sind.
+- Im `_BlockManager` entstehen interne Variant-Definitionen mit Prefix `__aov_`.
 
-## 4. Save / Load — der bewusste Failure-Test (5 min)
+**Stopper:** Wenn eine Komponente auf allen Instanzen verschwindet, wurde die Source-Definition statt einer Variant-Definition verändert.
 
-**Wichtig: Hier *muss* etwas brechen.** Das ist Sprint 4 (ON_UserData), und genau deshalb steht Sprint 4 als nächstes auf dem Plan.
+### 3.2 Deduplizierung prüfen
 
-1. Stelle sicher: Instanz #1 hat Sphere ausgeblendet (Variant aktiv).
-2. `_Save` als `smoke-test.3dm`.
-3. Rhino schliessen, neu starten, `smoke-test.3dm` öffnen.
-4. **Was du sehen wirst (erwartetes Verhalten heute):**
-   - Die Variant-Definition `__aov_Motor_v1_…` ist im Block Manager noch da
-   - Instanz #1 zeigt korrekt ohne Sphere (weil sie auf der Variant hängt)
-   - **ABER:** Im Outliner zeigt der `ComponentNode` für Sphere wieder 👁 (sichtbar) statt ◯
-   - Klick auf den Eye-Toggle könnte das verfälschen oder einen Crash auslösen, weil der `VariantManager`-Cache leer ist
+1. Blende auf Instanz #1 wieder alles ein.
+2. Blende auf Instanz #1 dieselbe Komponente aus wie auf Instanz #3, z.B. `Welle`.
+3. Prüfe im `_BlockManager`, ob beide Instanzen denselben Hidden-State über dieselbe `__aov_...`-Definition teilen.
 
-Das ist der erwartete Pre-Sprint-4-Zustand. Notiere: *was genau* schiefläuft (verlorener UI-State, doppelte Variants, Crash beim Toggle nach Reload, …). Diese Notes fliessen direkt in das Sprint-4-Design.
+Erwartung: Gleicher State erzeugt keine doppelte Variant mit identischem Hash.
 
 ---
 
-## 5. Berichten
+## 4. Undo / Redo
 
-Nach dem Test bitte zurückmelden mit:
+1. Mit drei unterschiedlichen Hidden-States starten.
+2. 3x `Ctrl+Z` drücken.
+3. 3x `Ctrl+Y` drücken.
 
+Erwartung:
+
+- Jeder Undo macht eine Visibility-Änderung rückgängig.
+- Jeder Redo stellt genau eine Änderung wieder her.
+- Rhino bleibt stabil, der Outliner lässt sich refreshen, und die Varianten zeigen weiter auf gültige Definitionen.
+
+---
+
+## 5. Sprint-4 Roundtrip: Save / Close / Reopen
+
+Dieser Abschnitt ersetzt den alten Sprint-3-Failure-Test. Nach Sprint 4 muss Save/Load funktionieren.
+
+### 5.1 Ausgangszustand setzen
+
+Stelle vor dem Speichern einen eindeutig unterscheidbaren State her:
+
+- Instanz #1: Sphere hidden
+- Instanz #2: Box hidden
+- Instanz #3: Cylinder hidden
+
+Optional: Screenshot vom Viewport und Outliner machen.
+
+### 5.2 Speichern und Rhino schließen
+
+1. `_SaveAs` -> `sprint4-roundtrip.3dm`
+2. Rhino komplett schließen, nicht nur das Dokument.
+
+### 5.3 Neu öffnen und Restore prüfen
+
+1. Rhino 8 neu starten.
+2. `sprint4-roundtrip.3dm` öffnen.
+3. Command History prüfen.
+
+Erwartung:
+
+- Die History meldet sinngemäß `AssemblyOutliner: Restored 3 persisted assembly instance(s).`
+- Im Viewport fehlen dieselben drei Komponenten wie vor dem Save.
+- Nach `AssemblyOutliner` und `Refresh` zeigt der Outliner dieselben Hidden-States:
+  - Instanz #1: Sphere hidden
+  - Instanz #2: Box hidden
+  - Instanz #3: Cylinder hidden
+- Weitere Toggles nach dem Reload funktionieren ohne Crash und ohne doppelte sinnlose Varianten.
+- `_BlockManager` enthält die benötigten `__aov_...`-Definitionen und keine offensichtlichen Duplikate für identische States.
+
+**Stopper:** Wenn der Viewport korrekt aussieht, der Outliner aber alle Children sichtbar zeigt, liest der TreeBuilder die persistierte `ON_AssemblyUserData` nicht. Das war der erwartete Pre-Sprint-4-Fehler und ist jetzt ein Regression-Bug.
+
+---
+
+## 6. Copy/Paste
+
+### 6.1 Intra-Document Copy/Paste
+
+1. In `sprint4-roundtrip.3dm` eine Instanz mit aktivem Hidden-State selektieren.
+2. `Ctrl+C`, dann `Ctrl+V`, Kopie an anderer Stelle platzieren.
+3. Outliner refreshen.
+
+Erwartung:
+
+- Die Kopie zeigt im Viewport denselben Hidden-State wie die kopierte Instanz.
+- Der Outliner zeigt für die Kopie denselben Hidden-State.
+- Ein anschließender Save -> Rhino schließen -> Reopen erhält auch den State der Kopie.
+
+### 6.2 Cross-Document Copy/Paste
+
+1. Instanz mit aktivem Hidden-State kopieren.
+2. Neues Rhino-Dokument öffnen.
+3. `Ctrl+V`, Kopie platzieren.
+4. Outliner refreshen.
+5. Speichern, Rhino schließen, neu öffnen.
+
+Erwartung:
+
+- Wenn Rhino die Source-Definition mit importiert oder eine gleichnamige Source-Definition im Ziel existiert, wird der State über Source-ID oder Source-Name wiederhergestellt.
+- Wenn die Source-Definition nicht auflösbar ist, darf Rhino nicht crashen. Die Instanz darf als "frozen" Variant-Geometrie sichtbar bleiben; das Plugin darf die nicht auflösbare UserData entfernen und eine Warnung loggen.
+
+---
+
+## 7. Graceful Degradation ohne Plugin
+
+Dieser Test validiert, dass `.3dm`-Dateien auch ohne Assembly-Outliner-Plugin öffnungsfähig bleiben.
+
+1. `sprint4-roundtrip.3dm` mit gespeicherten Hidden-States schließen.
+2. In Rhino `_-PlugInManager` öffnen und `RhinoAssemblyOutliner` deaktivieren, oder das `.rhp` temporär nicht laden.
+3. Rhino neu starten und `sprint4-roundtrip.3dm` öffnen.
+
+Erwartung ohne Plugin:
+
+- Die Datei öffnet ohne Crash.
+- Die sichtbare Geometrie bleibt im zuletzt gespeicherten Variant-Zustand erhalten.
+- Es gibt keinen Outliner-Restore, weil das Plugin nicht geladen ist.
+- Rhinos native UI kann interne `__aov_...`-Blockdefinitionen zeigen; das ist in diesem Zustand akzeptiert.
+
+Optionaler Unknown-UserData-Save-Test:
+
+1. Ohne geladenes Plugin `sprint4-roundtrip.3dm` als `sprint4-roundtrip-no-plugin-save.3dm` speichern.
+2. Rhino schließen.
+3. Plugin wieder aktivieren.
+4. `sprint4-roundtrip-no-plugin-save.3dm` öffnen.
+
+Erwartung: Rhino hat die unbekannte `ON_UserData` beim Save ohne Plugin erhalten, und der Restore funktioniert wieder. Falls das nicht zutrifft, ist das ein Graceful-Degradation-Bug, aber die Originaldatei bleibt durch den SaveAs-Schritt unangetastet.
+
+Plugin wieder aktivieren:
+
+1. Plugin wieder laden/aktivieren.
+2. Wenn der optionale Save-Test übersprungen wurde: `sprint4-roundtrip.3dm` erneut öffnen. Wenn er ausgeführt wurde: `sprint4-roundtrip-no-plugin-save.3dm` geöffnet lassen oder erneut öffnen.
+3. Outliner refreshen.
+
+Erwartung:
+
+- Persistierte `ON_UserData` wurde von Rhino erhalten.
+- Plugin-Restore funktioniert wieder.
+- Viewport und Outliner stimmen erneut überein.
+
+---
+
+## 8. Berichtsvorlage
+
+```text
+Sprint 3/4 Smoke + Roundtrip - Ergebnisse
+=========================================
+
+0. Managed Build:              [OK | FAIL: ...]
+0. Native Release Build:       [OK | FAIL | SKIPPED: MSBuild/Rhino SDK fehlt]
+0. Native DLL neben .rhp:      [OK | FAIL: ...]
+1. Plugin Load + Native v5:    [OK | FAIL: ...]
+2. 3 Instanzen angelegt:       [OK | FAIL: ...]
+3.1 Per-Instance Hide:         [OK | FAIL: ...]
+3.2 Variant Dedup:             [OK | FAIL: ...]
+4. Undo/Redo:                  [OK | FAIL: ...]
+5. Save/Close/Reopen Restore:  [OK | FAIL: ...]
+5. Outliner State nach Reload: [OK | FAIL: ...]
+6. Intra-doc Copy/Paste:       [OK | FAIL: ...]
+6. Cross-doc Copy/Paste:       [OK | FAIL | SKIPPED: ...]
+7. Ohne Plugin geöffnet:       [OK | FAIL | SKIPPED: ...]
+7. Plugin wieder aktiviert:    [OK | FAIL | SKIPPED: ...]
+
+Crashes:                       [keine | Schritt X mit Cmd History/Crash Dump]
+Command-History Warnungen:     [...]
+BlockManager Auffälligkeiten:  [...]
+Sonstiges:                     [...]
 ```
-Smoke Test Sprint 3 — Ergebnisse
-================================
-
-0. Build/Plugin-Load:    [OK | FAIL: ...]
-1. Test-Block angelegt:  [OK | FAIL: ...]
-2.1 Single Hide:         [OK | FAIL: ...]
-2.2 Dedup:               [OK | FAIL: ...]
-2.3 Verschiedene States: [OK | FAIL: ...]
-2.4 Show wieder:         [OK | FAIL: ...]
-2.4 GC nach 5s:          [OK | FAIL: ...]
-3.  Undo/Redo:           [OK | FAIL: ...]
-4.  Save/Load:           [erwartete Anomalien beschrieben]
-
-Crashes:                 [keine | Schritt X.Y mit Stack/Cmd-History]
-Sonstiges Auffälliges:   [...]
-```
-
-Wenn alles bis Schritt 3 grün ist und Schritt 4 nur die *erwarteten* Anomalien zeigt, ist Sprint 3 wirklich fertig und wir können Sprint 4 starten.
 
 ---
 
-## Bekannte offene Punkte (du musst sie nicht testen, nur kennen)
+## Bekannte Grenzen
 
-- **Nested Blocks:** Blöcke-in-Blöcken laufen heute durch den Legacy-C++-Conduit, nicht durch `VariantManager`. Definition-Cloning für nested Blocks kommt in Sprint 4+. Dein Smoke Test hat nur eine Ebene Tiefe — perfekt.
-- **Mixed-State-Icon (◐):** Die UI zeigt es korrekt für die *direkten* Children, aber bei tief verschachtelten Strukturen kann es flackern. Nicht-blocker.
-- **Variant-Definitionen im Block Manager sichtbar:** Sie tragen `__aov_`-Prefix. User soll sie nicht editieren. Wir filtern sie aktuell aus dem Outliner heraus, aber der Block Manager ist Rhino-eigen und zeigt sie. Cosmetic.
+- **Nested Blocks:** Dieser Smoke Test nutzt nur eine Block-Ebene. Definition Cloning für tiefer verschachtelte Visibility bleibt Sprint 8+.
+- **Rhino Object Properties:** Rhinos natives Type-Feld kann interne Variant-Namen anzeigen. Der Outliner und das eigene DetailPanel sollen den Source-Namen verwenden.
+- **Graceful degradation:** Ohne Plugin bleibt die Geometrie sichtbar wie gespeichert, aber sie ist nicht editierbar als Assembly-State. Das ist erwartetes Verhalten.

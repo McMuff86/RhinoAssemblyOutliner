@@ -20,6 +20,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Native C++ project now builds against the installed Rhino 8 SDK by replacing stale document user-string and display-pipeline API calls
 - `VariantManager.GetOrCreateVariant` serializes cache miss creation to avoid duplicate variants under concurrent access
 
+### Documentation
+- Updated the Rhino smoke-test checklist for Sprint 4 Save/Load roundtrip validation, native DLL placement, Copy/Paste, and graceful degradation without the plugin
+
 ### Fixed (2026-04-29 — Phase A: Build Cleanup)
 - `VariantGarbageCollector` Timer ambiguity (`System.Timers.Timer` vs `System.Threading.Timer`) resolved via aliased `using`
 - `KeyboardShortcutMappingTests` enums (`Modifiers`, `OutlinerAction`) made `public` so they can appear in `[Theory]` method signatures
